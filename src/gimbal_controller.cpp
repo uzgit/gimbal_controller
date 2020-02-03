@@ -6,14 +6,14 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <gazebo_msgs/LinkState.h>
 
-ros::Publisher publisher;
+ros::Publisher link_state_publisher;
 
 void callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 {
 	int num_markers = msg->markers.size();
 	double x, y, z;
 	double rotation_x, rotation_y, rotation_z, rotation_w;
-	ROS_INFO("Detected %d markers.", num_markers);
+	ROS_INFO("Detected %d marker(s).", num_markers);
 
 	for(int i = 0; i < 1; i ++)
 	{
@@ -27,7 +27,7 @@ void callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 		rotation_y = msg->markers[i].pose.orientation.y;
 		rotation_z = msg->markers[i].pose.orientation.z;
 		rotation_w = msg->markers[i].pose.orientation.w;
-
+/*
 		ROS_INFO("\n\tID: %d", id);
 		ROS_INFO("\n\tPose: (%0.3f, %0.3f, %0.3f)\n\tRotation:(%0.3f, %0.3f, %0.3f, %0.3f)",
 			x,
@@ -37,16 +37,25 @@ void callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 			rotation_y,
 			rotation_z,
 			rotation_w);
+*/
 	}
 
 	gazebo_msgs::LinkState link_state_msg;
-	link_state_msg.link_name = "camera_link";
+	link_state_msg.link_name = "iris_demo::iris_demo::camera_link";
+/*
+	link_state_msg.pose.position.x = x;
+	link_state_msg.pose.position.y = y;
+	link_state_msg.pose.position.z = z;
+*/
 	link_state_msg.pose.orientation.x = rotation_x;
 	link_state_msg.pose.orientation.y = rotation_y;
-	link_state_msg.pose.orientation.z = rotation_z;
-	link_state_msg.pose.orientation.w = rotation_w;
-//	link_state_msg.reference_frame = "parent";
-	publisher.publish(link_state_msg);
+	link_state_msg.pose.orientation.z = 0;
+	link_state_msg.pose.orientation.w = 0;
+
+//	link_state_msg.pose.orientation.z = rotation_z;
+//	link_state_msg.pose.orientation.w = rotation_w;
+	link_state_msg.reference_frame = "iris_demo::iris_demo::gimbal_small_2d::tilt_link";
+	link_state_publisher.publish(link_state_msg);
 	
 }
 
@@ -58,7 +67,8 @@ int main(int argc, char **argv)
 	ros::NodeHandle node_handle;
 	ros::Subscriber subscriber = node_handle.subscribe("/whycon_ros/visual", 1000, callback);
 	//ros::Publisher
-	publisher  = node_handle.advertise<gazebo_msgs::LinkState>("test", 1000);
+	link_state_publisher  = node_handle.advertise<gazebo_msgs::LinkState>("/gazebo/set_link_state", 1000);
+
 	ros::spin();
 
 	//read marker array topic from whycon
