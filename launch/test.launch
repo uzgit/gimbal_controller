@@ -1,0 +1,3 @@
+<launch>
+  <node name="gimbal_controller" pkg="gimbal_controller" type="gimbal_controller_node" />
+</launch>
