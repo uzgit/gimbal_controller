@@ -65,8 +65,8 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 			rotation_w);
 	}
 	
-	setpoint_x.data = - atan(x / z);
-	setpoint_y.data = atan(y / z);
+	setpoint_x.data =  - atan(x / z);
+	setpoint_y.data =  atan(y / z);
 
 	setpoint_publisher_x.publish(setpoint_x);
 	setpoint_publisher_y.publish(setpoint_y);

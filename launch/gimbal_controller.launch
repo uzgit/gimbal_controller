@@ -2,6 +2,9 @@
 
 <launch>
 	<node name="gimbal_controller" pkg="gimbal_controller" type="gimbal_controller" />
+	<!-- roslaunch whycon_ros whycon.launch camInfo:=/iris/camera/camera_info camRaw:=/iris/camera/image_raw maxMarkers:=1 idBits:=2 -->
+	
+
 
 	<!-- PID controller node instantiation -->
 	<!--
