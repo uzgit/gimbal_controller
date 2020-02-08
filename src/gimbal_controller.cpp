@@ -1,4 +1,5 @@
 #include "ros/ros.h"
+#include <std_msgs/Bool.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Float64.h>
 #include <geometry_msgs/Point.h>
@@ -33,9 +34,11 @@ double idle_setpoint_y = 0.2;
 
 std_msgs::Float64 setpoint_x;
 std_msgs::Float64 setpoint_y;
+std_msgs::Bool idle_state_msg;
 
 ros::Publisher setpoint_publisher_x;
 ros::Publisher setpoint_publisher_y;
+ros::Publisher idle_state_publisher;
 
 ros::Time last_detection_time(0);
 
@@ -69,12 +72,20 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 //			rotation_z,
 //			rotation_w);
 	}
-	
-	setpoint_x.data = - atan(x / z);
-	setpoint_y.data = atan(y / z);
+
+
+	// for setting absolute position
+	setpoint_x.data = - atan( 4 * x / z );
+	setpoint_y.data = atan( 4 * y / z );
+
+
+	// for setting velocity
+//	setpoint_x.data = -x;
+//	setpoint_y.data = y;
 
 	setpoint_publisher_x.publish(setpoint_x);
 	setpoint_publisher_y.publish(setpoint_y);
+	idle_state_msg.data = false;
 
 	last_detection_time = ros::Time::now();
 
@@ -94,7 +105,9 @@ int main(int argc, char **argv)
 	// Publisher to set the states of the current PID control parameters
 	setpoint_publisher_x = node_handle.advertise<std_msgs::Float64>("/iris/camera/x/setpoint", 1000);
 	setpoint_publisher_y = node_handle.advertise<std_msgs::Float64>("/iris/camera/y/setpoint", 1000);
+	idle_state_publisher = node_handle.advertise<std_msgs::Bool>("/iris/camera/idle_state",1000);
 
+	idle_state_msg.data = false;
 	// initialize gimbal position to forward level
 	setpoint_x.data = 0;
 	setpoint_y.data = 0;
@@ -108,15 +121,18 @@ int main(int argc, char **argv)
 	{
 		ros::spinOnce();
 
-		if( ros::Time::now() - last_detection_time > detection_fail_timeout)
+		if( ros::Time::now() - last_detection_time > detection_fail_timeout && ! idle_state_msg.data)
 		{
-			// set the gimbal to a favorable attitude
-			setpoint_x.data = 0;
-			setpoint_y.data = 0.1;
+			// set the gimbal to the idle attitude
+			setpoint_x.data = idle_setpoint_x;
+			setpoint_y.data = idle_setpoint_y;
+			idle_state_msg.data = true;
 			
 			// publish the message
 			setpoint_publisher_x.publish(idle_setpoint_x);
 			setpoint_publisher_y.publish(idle_setpoint_y);
+
+			idle_state_publisher.publish(idle_state_msg);
 		}
 
 		loop_rate.sleep();
