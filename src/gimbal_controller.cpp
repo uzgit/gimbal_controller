@@ -9,6 +9,7 @@
 #include <gazebo_msgs/LinkStates.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/transform_datatypes.h>
+#include <sensor_msgs/Imu.h>
 
 #include <cmath>
 #include <ctime>
@@ -43,17 +44,8 @@ std_msgs::Bool idle_state_msg;
 ros::Publisher setpoint_publisher_x;
 ros::Publisher setpoint_publisher_y;
 ros::Publisher idle_state_publisher;
-ros::Publisher landing_pad_relative_pose_publisher;
-tf2::Vector3 landing_pad_position;
-tf2::Quaternion landing_pad_orientation;
-geometry_msgs::Pose landing_pad_pose;
 
 ros::Time last_detection_time(0);
-
-std::string iris_base_name = "iris_demo::iris_demo::iris::base_link";
-std::string base_link_name = "iris_demo::iris_demo::gimbal_small_2d::base_link";
-std::string tilt_link_name = "iris_demo::iris_demo::gimbal_small_2d::tilt_link";
-tf2::Quaternion camera_quaternion;
 
 void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 {
@@ -80,8 +72,6 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 		rotation_z = msg->markers[i].pose.orientation.z;
 		rotation_w = msg->markers[i].pose.orientation.w;
 
-		landing_pad_position    = tf2::Vector3(x, y, z);
-		landing_pad_orientation = tf2::Quaternion(rotation_x, rotation_y, rotation_z, rotation_w);
 //		ROS_INFO("\n\tID: %d", id);
 //		ROS_INFO("\n\tPose: (%0.3f, %0.3f, %0.3f)\n\tRotation:(%0.3f, %0.3f, %0.3f, %0.3f)",
 //			x,
@@ -107,20 +97,6 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 
 	if( detection )
 	{
-		// rotate landing pad position by camera rotation
-		landing_pad_position = tf2::quatRotate(camera_quaternion, landing_pad_position);	
-		landing_pad_pose.position.x = landing_pad_position.x();
-		landing_pad_pose.position.y = landing_pad_position.y();
-		landing_pad_pose.position.z = landing_pad_position.z();
-		
-		// rotate landing pad orientation by camera rotation
-		landing_pad_orientation = landing_pad_orientation * camera_quaternion.inverse();
-
-		landing_pad_pose.orientation.x = landing_pad_orientation.x();
-		landing_pad_pose.orientation.y = landing_pad_orientation.y();
-		landing_pad_pose.orientation.z = landing_pad_orientation.z();
-		landing_pad_pose.orientation.w = landing_pad_orientation.w();
-
 		// for setting absolute position
 		setpoint_x.data = - atan( 4 * x / z );
 		setpoint_y.data = atan( 4 * y / z );
@@ -133,62 +109,9 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 		setpoint_publisher_y.publish(setpoint_y);
 		idle_state_msg.data = false;
 
-		landing_pad_relative_pose_publisher.publish(landing_pad_pose);
-
 		last_detection_time = ros::Time::now();
 
 	//	ROS_INFO("setpoint = (%f, %f)", setpoint_x.data, setpoint_y.data);
-	}
-}
-
-void link_states_callback(const gazebo_msgs::LinkStates::ConstPtr& msg)
-{
-//	ROS_INFO("LOL GOT A MESSAGE");
-
-	tf2::Quaternion iris_quaternion;	
-	tf2::Quaternion base_quaternion;
-	tf2::Quaternion tilt_quaternion;
-
-	geometry_msgs::Quaternion buffer;
-
-	int iris_index = -1;
-	int base_index = -1;
-	int tilt_index = -1;
-	
-	int i = 0;
-	int num_links = msg->name.size();
-	while(i < num_links && ( iris_index == -1 || base_index == -1 || tilt_index == -1 ) )
-	{
-		if( msg->name[i] == iris_base_name )
-		{
-			iris_index = i;
-		}
-		else if( msg->name[i] == base_link_name )
-		{
-			base_index = i;
-		}
-		else if( msg->name[i] == tilt_link_name )
-		{
-			tilt_index = i;
-		}
-
-		i ++;
-	}
-	if( iris_index != -1 && base_index != -1 && tilt_index != -1 )
-	{
-		buffer = msg->pose[iris_index].orientation;
-		tf2::convert(buffer, iris_quaternion);
-
-		buffer = msg->pose[base_index].orientation;
-		tf2::convert(buffer, base_quaternion);
-
-		buffer = msg->pose[tilt_index].orientation;
-		tf2::convert(buffer, tilt_quaternion);
-
-		camera_quaternion = base_quaternion * iris_quaternion.inverse();
-		camera_quaternion = tilt_quaternion * camera_quaternion.inverse();
-
-//		ROS_INFO("camera orientation: <%0.3f, %0.3f, %0.3f, %0.3f>", camera_quaternion.x(), camera_quaternion.y(), camera_quaternion.z(), camera_quaternion.w()); 
 	}
 }
 
@@ -201,13 +124,11 @@ int main(int argc, char **argv)
 	
 	// Subscriber to get position(s) of landing pad marker(s)
 	ros::Subscriber visual_subscriber     = node_handle.subscribe("/whycon_ros/visual", 1000, visual_callback);
-	ros::Subscriber link_state_subscriber = node_handle.subscribe("/gazebo/link_states", 1000, link_states_callback);
 	
 	// Publisher to set the states of the current PID control parameters
 	setpoint_publisher_x = node_handle.advertise<std_msgs::Float64>("/iris/camera/x/setpoint", 1000);
 	setpoint_publisher_y = node_handle.advertise<std_msgs::Float64>("/iris/camera/y/setpoint", 1000);
 	idle_state_publisher = node_handle.advertise<std_msgs::Bool>("/iris/camera/idle_state",1000);
-	landing_pad_relative_pose_publisher = node_handle.advertise<geometry_msgs::Pose>("/landing_pad/relative_pose", 100);
 
 	idle_state_msg.data = false;
 	// initialize gimbal position to forward level
