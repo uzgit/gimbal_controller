@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   pid
   roscpp
   std_msgs
+  tf2_ros
   visualization_msgs
 )
 
