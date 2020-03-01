@@ -1,16 +1,18 @@
 #include "ros/ros.h"
-#include <std_msgs/Bool.h>
-#include <std_msgs/String.h>
-#include <std_msgs/Float64.h>
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/Pose.h>
-#include <visualization_msgs/MarkerArray.h>
 #include <gazebo_msgs/LinkState.h>
 #include <gazebo_msgs/LinkStates.h>
+#include <sensor_msgs/Imu.h>
+#include <std_msgs/Bool.h>
+#include <std_msgs/Float64.h>
+#include <std_msgs/String.h>
+#include <visualization_msgs/MarkerArray.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/transform_datatypes.h>
-#include <sensor_msgs/Imu.h>
+#include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
 
 #include <cmath>
 #include <ctime>
@@ -33,6 +35,8 @@ ros::Publisher idle_state_publisher;
 
 ros::Time last_detection_time(0);
 
+tf2_ros::Buffer transform_buffer;
+
 void gimbal_x_position_callback(const std_msgs::Float64::ConstPtr msg)
 {
 	gimbal_x_position = msg->data;
@@ -45,10 +49,12 @@ void gimbal_y_position_callback(const std_msgs::Float64::ConstPtr msg)
 
 void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 {
+	
+
 	bool detection = false;
 
 	int num_markers = msg->markers.size();
-	double x, y, z;
+	double x, y, z, normal_x, normal_y, normal_z;
 	double rotation_x, rotation_y, rotation_z, rotation_w;
 
 	int i = 0;
@@ -80,11 +86,78 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 
 	if( detection )
 	{
+/*
+		// this works but is very noisy
+		static tf2_ros::TransformBroadcaster transform_broadcaster;
+
+		// for getting distance
+		geometry_msgs::TransformStamped detection_normal_transform_stamped;
+		detection_normal_transform_stamped.header.stamp = ros::Time::now();
+		detection_normal_transform_stamped.header.frame_id = "camera_frame";
+		detection_normal_transform_stamped.child_frame_id  = "detection_normal_frame";
+		detection_normal_transform_stamped.transform.translation.x = 0;
+		detection_normal_transform_stamped.transform.translation.y = 0;
+		detection_normal_transform_stamped.transform.translation.z = 0;
+		detection_normal_transform_stamped.transform.rotation.w = rotation_w;
+		detection_normal_transform_stamped.transform.rotation.x = rotation_x;
+		detection_normal_transform_stamped.transform.rotation.y = rotation_y;
+		detection_normal_transform_stamped.transform.rotation.z = rotation_z;
+		
+		transform_broadcaster.sendTransform(detection_normal_transform_stamped);
+
+		geometry_msgs::PoseStamped detection_pose;
+		detection_pose.header.stamp = ros::Time::now();
+		detection_pose.header.frame_id = "camera_frame";
+		detection_pose.pose.position.x = x;
+		detection_pose.pose.position.y = y;
+		detection_pose.pose.position.z = z;
+		detection_pose.pose.orientation.w = rotation_w;
+		detection_pose.pose.orientation.x = rotation_x;
+		detection_pose.pose.orientation.y = rotation_y;
+		detection_pose.pose.orientation.z = rotation_z;
+
+		geometry_msgs::PoseStamped detection_normal_pose;
+
+		try
+		{
+			detection_normal_pose = transform_buffer.transform(detection_pose, "detection_normal_frame", ros::Duration(0.1));
+			normal_z = detection_normal_pose.pose.position.z;
+			normal_x = copysign(detection_normal_pose.pose.position.x, x);
+			normal_y = copysign(detection_normal_pose.pose.position.y, y);
+			ROS_INFO_STREAM(detection_pose);
+			ROS_INFO_STREAM(detection_normal_pose);
+//			ROS_INFO("distance: %0.2f, %0.2f, ", );
+		}
+		catch( tf2::TransformException &exception)
+		{
+			ROS_WARN("%s", exception.what());
+		}
+*/
 		// for setting absolute position
-		setpoint_x.data += - atan( x / z );
-		setpoint_y.data += atan( y / z );
-//		setpoint_x.data = -5 * atan( x / z );
-//		setpoint_y.data = 5 * atan( y / z );
+//		setpoint_x.data += -0.5 * atan( x / z );
+//		setpoint_y.data += 0.5 * atan( y / z );
+//		setpoint_x.data += -1.5 * atan( x / z );
+//		setpoint_y.data +=  1.5 * atan( y / z );
+//		setpoint_x.data =  x * atan( x / z );
+//		setpoint_y.data =  -y * atan( y / z );
+
+		// should work in theory but has issues with large angles
+//		setpoint_x.data =  -atan( normal_x / normal_z );
+//		setpoint_y.data =   atan( normal_y / normal_z );
+
+//		setpoint_x.data += -0.25 * normal_x / normal_z;
+//		setpoint_y.data +=  0.25 * normal_y / normal_z;
+
+		// this sort of thing seems to work the best using PID systems on the x and y positions
+		setpoint_x.data += -0.1 * x / z;
+		setpoint_y.data +=  0.1 * y / z;
+
+//		setpoint_x.data = -x / normal_distance;
+//		setpoint_y.data =  y / z;
+
+
+//		setpoint_x.data += -x / z;
+//		setpoint_y.data += y / z;
 
 		// for setting velocity
 //		setpoint_x.data = 10 * -x / z;
@@ -98,6 +171,13 @@ void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 
 		last_detection_time = ros::Time::now();
 	}
+/*	
+	else
+	{
+		setpoint_x.data = 0;
+		setpoint_y.data = 0;
+	}
+*/
 }
 
 int main(int argc, char **argv)
@@ -121,6 +201,8 @@ int main(int argc, char **argv)
 
 	// base_link to camera_frame transform publisher
 	static tf2_ros::TransformBroadcaster transform_broadcaster;
+
+	tf2_ros::TransformListener transform_listener(transform_buffer);
 
 	// initialize gimbal position to forward level
 	setpoint_x.data = idle_setpoint_x;
