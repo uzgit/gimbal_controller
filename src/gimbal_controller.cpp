@@ -32,6 +32,7 @@ std_msgs::Bool idle_state_msg;
 ros::Publisher setpoint_publisher_x;
 ros::Publisher setpoint_publisher_y;
 ros::Publisher idle_state_publisher;
+ros::Publisher landing_pad_camera_pose_publisher;
 
 ros::Time last_detection_time(0);
 
@@ -47,55 +48,31 @@ void gimbal_y_position_callback(const std_msgs::Float64::ConstPtr msg)
 	gimbal_y_position = msg->data;
 }
 
-void visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
+void whycon_visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg)
 {
-	
+	// capture the pose
+	geometry_msgs::PoseStamped landing_pad_camera_pose;	
+	landing_pad_camera_pose.header.stamp = ros::Time::now();
+	landing_pad_camera_pose.header.frame_id = "camera_frame";
+	landing_pad_camera_pose.pose = msg->markers[0].pose;
+/*
+	landing_pad_camera_pose.pose.position = msg->markers[0].pose.position;
+	landing_pad_camera_pose.pose.orientation.w = 1;
+	landing_pad_camera_pose.pose.orientation.x = 0;
+	landing_pad_camera_pose.pose.orientation.y = 0;
+	landing_pad_camera_pose.pose.orientation.z = 0;
+*/
+	landing_pad_camera_pose_publisher.publish(landing_pad_camera_pose);
 
-	bool detection = false;
+	// this sort of thing seems to work the best using PID systems on the x and y positions
+	setpoint_x.data += -0.1 * landing_pad_camera_pose.pose.position.x / landing_pad_camera_pose.pose.position.z;
+	setpoint_y.data +=  0.1 * landing_pad_camera_pose.pose.position.y / landing_pad_camera_pose.pose.position.z;
 
-	int num_markers = msg->markers.size();
-	double x, y, z, normal_x, normal_y, normal_z;
-	double rotation_x, rotation_y, rotation_z, rotation_w;
+	setpoint_publisher_x.publish(setpoint_x);
+	setpoint_publisher_y.publish(setpoint_y);
+	idle_state_msg.data = false;
 
-	int i = 0;
-	while( i < num_markers && ! detection )
-	{
-		int id = msg->markers[i].id;
-
-		x = msg->markers[i].pose.position.x;
-		y = msg->markers[i].pose.position.y;
-		z = msg->markers[i].pose.position.z;
-
-		rotation_x = msg->markers[i].pose.orientation.x;
-		rotation_y = msg->markers[i].pose.orientation.y;
-		rotation_z = msg->markers[i].pose.orientation.z;
-		rotation_w = msg->markers[i].pose.orientation.w;
-
-		int ii = 0;
-		while( ii < 2 && landing_pad_id[ii] != id )
-		{
-			ii ++;
-		}
-		if( ii < 2 )
-		{
-			detection = true;
-		}
-
-		i ++;
-	}
-
-	if( detection )
-	{
-		// this sort of thing seems to work the best using PID systems on the x and y positions
-		setpoint_x.data += -0.1 * x / z;
-		setpoint_y.data +=  0.1 * y / z;
-
-		setpoint_publisher_x.publish(setpoint_x);
-		setpoint_publisher_y.publish(setpoint_y);
-		idle_state_msg.data = false;
-
-		last_detection_time = ros::Time::now();
-	}
+	last_detection_time = ros::Time::now();
 }
 
 int main(int argc, char **argv)
@@ -106,13 +83,16 @@ int main(int argc, char **argv)
 	ros::NodeHandle node_handle;
 	
 	// subscriber to get position(s) of landing pad marker(s)
-	ros::Subscriber visual_subscriber = node_handle.subscribe("/whycon_ros/visual", 1000, visual_callback);
+	ros::Subscriber visual_subscriber = node_handle.subscribe("/whycon_ros/visual", 1000, whycon_visual_callback);
 	
 	// publisher to set the states of the current PID control parameters
 	setpoint_publisher_x = node_handle.advertise<std_msgs::Float64>("/gimbal/x/setpoint", 1000);
 	setpoint_publisher_y = node_handle.advertise<std_msgs::Float64>("/gimbal/y/setpoint", 1000);
 	idle_state_publisher = node_handle.advertise<std_msgs::Bool>("/gimbal/idle_state",1000);
 	idle_state_msg.data = false;
+
+	// publisher to share the pose of the landing pad within the camera frame
+	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
 
 	ros::Subscriber gimbal_x_position_subscriber = node_handle.subscribe("/gimbal/x/position", 1000, gimbal_x_position_callback);
 	ros::Subscriber gimbal_y_position_subscriber = node_handle.subscribe("/gimbal/y/position", 1000, gimbal_y_position_callback);
@@ -152,7 +132,7 @@ int main(int argc, char **argv)
 		// send transform
 		geometry_msgs::TransformStamped camera_transform_stamped;
 		camera_transform_stamped.header.stamp = ros::Time::now();
-		camera_transform_stamped.header.frame_id = "body_edn";
+		camera_transform_stamped.header.frame_id = "body_END";
 		camera_transform_stamped.child_frame_id  = "camera_frame";
 		camera_transform_stamped.transform.translation.x = 0;
 		camera_transform_stamped.transform.translation.y = 0;
