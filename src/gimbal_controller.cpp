@@ -168,19 +168,24 @@ int main(int argc, char **argv)
 		camera_transform_stamped.header.stamp = ros::Time::now();
 		camera_transform_stamped.header.frame_id = "body_END";
 		camera_transform_stamped.child_frame_id  = "camera_frame";
+
+/*
 		camera_transform_stamped.transform.translation.x = 0;
 		camera_transform_stamped.transform.translation.y = 0;
 		camera_transform_stamped.transform.translation.z = 0;
+*/
+
 		tf2::Quaternion camera_rotation;
 		camera_rotation.setRPY(0, gimbal_y_position, gimbal_x_position);
+		camera_transform_stamped.transform.rotation = tf2::toMsg(camera_rotation);
 
+/*
 		tf2::Quaternion camera_rotation_inverse = camera_rotation.inverse();
-
 		camera_transform_stamped.transform.rotation.w = camera_rotation_inverse.w();
 		camera_transform_stamped.transform.rotation.x = camera_rotation_inverse.x();
 		camera_transform_stamped.transform.rotation.y = camera_rotation_inverse.y();
 		camera_transform_stamped.transform.rotation.z = camera_rotation_inverse.z();
-		
+*/		
 		transform_broadcaster.sendTransform(camera_transform_stamped);
 
 		loop_rate.sleep();
