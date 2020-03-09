@@ -166,7 +166,7 @@ int main(int argc, char **argv)
 		// send transform
 		geometry_msgs::TransformStamped camera_transform_stamped;
 		camera_transform_stamped.header.stamp = ros::Time::now();
-		camera_transform_stamped.header.frame_id = "body_END";
+		camera_transform_stamped.header.frame_id = "body_NEU";
 		camera_transform_stamped.child_frame_id  = "camera_frame";
 
 /*
