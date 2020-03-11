@@ -12,7 +12,6 @@
 #include <tf2/transform_datatypes.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
-#include <tf2_ros/transform_listener.h>
 
 #include <apriltag_ros/AprilTagDetectionArray.h>
 
@@ -61,48 +60,35 @@ void apriltag_visual_callback(const apriltag_ros::AprilTagDetectionArray::ConstP
 
 	for(int i = 0; i < num_detections; i ++)
 	{
+		// the landing pad april tag has id 0
 		if( _msg->detections[i].id[0] == 0 )
 		{
+			// get the detection pose
 			detection = _msg->detections[i];
 
+			// copy the pose into a PoseStamped message and publish
 			geometry_msgs::PoseWithCovarianceStamped buffer = detection.pose;
 			geometry_msgs::PoseStamped apriltag_camera_pose;
 			apriltag_camera_pose.pose = buffer.pose.pose;
 			apriltag_camera_pose.header.stamp = ros::Time::now();
-			apriltag_camera_pose.header.frame_id = "camera_frame";
-
-			/*
-			apriltag_camera_pose.pose.orientation.w = 1;
-			apriltag_camera_pose.pose.orientation.x = 0;
-			apriltag_camera_pose.pose.orientation.y = 0;
-			apriltag_camera_pose.pose.orientation.z = 0;
-			*/
-		
-			tf2::Quaternion rotation;
-			tf2::fromMsg(apriltag_camera_pose.pose.orientation, rotation);
-
-			// invert orientation
-//			rotation = rotation.inverse();
-			apriltag_camera_pose.pose.orientation = tf2::toMsg(rotation);
-
-			// remove yaw
-			tf2::Matrix3x3(rotation).getEulerYPR(landing_pad_yaw, landing_pad_pitch, landing_pad_roll);
-//			ROS_INFO("tag YPR: %0.2f, %0.2f, %0.2f", landing_pad_yaw, landing_pad_pitch, landing_pad_roll);
-	/*
-			tf2::Quaternion rotation;
-			rotation.setRPY(roll, pitch, 0);
-
-			apriltag_camera_pose.pose.orientation = tf2::toMsg(rotation);
-	*/
+			apriltag_camera_pose.header.frame_id = "camera_frame_apriltag";
 			landing_pad_camera_pose_publisher.publish(apriltag_camera_pose);
 
+			// extract yaw
+			tf2::Quaternion rotation;
+			tf2::fromMsg(apriltag_camera_pose.pose.orientation, rotation);
+			tf2::Matrix3x3(rotation).getEulerYPR(landing_pad_yaw, landing_pad_pitch, landing_pad_roll);
+
+			// increment gimbal setpoints, scaling by inverse of z-distance
 			setpoint_x.data += -0.1 * apriltag_camera_pose.pose.position.x / apriltag_camera_pose.pose.position.z;
 			setpoint_y.data +=  0.1 * apriltag_camera_pose.pose.position.y / apriltag_camera_pose.pose.position.z;
 
+			// publish setpoints and idle state
 			setpoint_publisher_x.publish(setpoint_x);
 			setpoint_publisher_y.publish(setpoint_y);
 			idle_state_msg.data = false;
 
+			// update most recent detection time
 			last_detection_time = ros::Time::now();
 		}
 	}
@@ -142,26 +128,23 @@ int main(int argc, char **argv)
 	ros::init(argc, argv, "gimbal_controller");
 	ros::NodeHandle node_handle;
 	
-	// subscriber to get position(s) of landing pad marker(s)
-	ros::Subscriber whycon_visual_subscriber	= node_handle.subscribe("/whycon_ros/visual",	1000, whycon_visual_callback);
-	ros::Subscriber apriltag_visual_subscriber	= node_handle.subscribe("/tag_detections",	1000, apriltag_visual_callback);
+	// initialize subscribers
+	ros::Subscriber whycon_visual_subscriber	= node_handle.subscribe("/whycon_ros/visual",	1000, whycon_visual_callback	);
+	ros::Subscriber apriltag_visual_subscriber	= node_handle.subscribe("/tag_detections",	1000, apriltag_visual_callback	);
+	ros::Subscriber gimbal_x_position_subscriber	= node_handle.subscribe("/gimbal/x/position",	1000, gimbal_x_position_callback);
+	ros::Subscriber gimbal_y_position_subscriber	= node_handle.subscribe("/gimbal/y/position",	1000, gimbal_y_position_callback);
 	
-	// publisher to set the states of the current PID control parameters
-	setpoint_publisher_x = node_handle.advertise<std_msgs::Float64>("/gimbal/x/setpoint", 1000);
-	setpoint_publisher_y = node_handle.advertise<std_msgs::Float64>("/gimbal/y/setpoint", 1000);
-	idle_state_publisher = node_handle.advertise<std_msgs::Bool>("/gimbal/idle_state",1000);
-	idle_state_msg.data = false;
+	// publisher to set the states of the current gimbal PID control values
+	setpoint_publisher_x = node_handle.advertise<std_msgs::Float64>("/gimbal/x/setpoint",	1000);
+	setpoint_publisher_y = node_handle.advertise<std_msgs::Float64>("/gimbal/y/setpoint",	1000);
+	idle_state_publisher = node_handle.advertise<std_msgs::Bool>("/gimbal/idle_state",	1000);
+	idle_state_msg.data  = false;
 
 	// publisher to share the pose of the landing pad within the camera frame
 	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
 
-	ros::Subscriber gimbal_x_position_subscriber = node_handle.subscribe("/gimbal/x/position", 1000, gimbal_x_position_callback);
-	ros::Subscriber gimbal_y_position_subscriber = node_handle.subscribe("/gimbal/y/position", 1000, gimbal_y_position_callback);
-
-	// base_link to camera_frame transform publisher
+	// initialize transform broadcaster
 	static tf2_ros::TransformBroadcaster transform_broadcaster;
-
-	tf2_ros::TransformListener transform_listener(transform_buffer);
 
 	// initialize gimbal position to forward level
 	setpoint_x.data = idle_setpoint_x;
@@ -190,28 +173,18 @@ int main(int argc, char **argv)
 			idle_state_publisher.publish(idle_state_msg);
 		}
 
-		// send transform
+		// generate transform
 		geometry_msgs::TransformStamped camera_transform_stamped;
 		camera_transform_stamped.header.stamp = ros::Time::now();
-//		camera_transform_stamped.header.frame_id = "body_NEU";
-//		camera_transform_stamped.child_frame_id  = "camera_frame";
+		camera_transform_stamped.header.frame_id = "camera_frame_apriltag_straightened";
+		camera_transform_stamped.child_frame_id = "body_enu";
 
-		// changes
-		//*****************************************
-		camera_transform_stamped.header.frame_id = "camera_frame_straightened";
-//		camera_transform_stamped.header.frame_id = "camera_frame";
-		camera_transform_stamped.child_frame_id = "body";
-		//*****************************************
-
+		// set rotation
 		tf2::Quaternion camera_rotation;
-		camera_rotation.setRPY(0, 0, gimbal_x_position - landing_pad_yaw);
-
-		//*****************************************
-		camera_rotation = camera_rotation.inverse();
-		//*****************************************
-
+		camera_rotation.setRPY(0, 0, - gimbal_x_position + landing_pad_yaw);
 		camera_transform_stamped.transform.rotation = tf2::toMsg(camera_rotation);
 
+		// broadcast transform
 		transform_broadcaster.sendTransform(camera_transform_stamped);
 
 		loop_rate.sleep();
