@@ -26,6 +26,9 @@ double idle_setpoint_y = 0.4;
 
 double gimbal_x_position = std::nan("1");
 double gimbal_y_position = std::nan("1");
+double landing_pad_yaw;
+double landing_pad_pitch;
+double landing_pad_roll;
 
 std_msgs::Float64 setpoint_x;
 std_msgs::Float64 setpoint_y;
@@ -67,6 +70,30 @@ void apriltag_visual_callback(const apriltag_ros::AprilTagDetectionArray::ConstP
 			apriltag_camera_pose.pose = buffer.pose.pose;
 			apriltag_camera_pose.header.stamp = ros::Time::now();
 			apriltag_camera_pose.header.frame_id = "camera_frame";
+
+			/*
+			apriltag_camera_pose.pose.orientation.w = 1;
+			apriltag_camera_pose.pose.orientation.x = 0;
+			apriltag_camera_pose.pose.orientation.y = 0;
+			apriltag_camera_pose.pose.orientation.z = 0;
+			*/
+		
+			tf2::Quaternion rotation;
+			tf2::fromMsg(apriltag_camera_pose.pose.orientation, rotation);
+
+			// invert orientation
+//			rotation = rotation.inverse();
+			apriltag_camera_pose.pose.orientation = tf2::toMsg(rotation);
+
+			// remove yaw
+			tf2::Matrix3x3(rotation).getEulerYPR(landing_pad_yaw, landing_pad_pitch, landing_pad_roll);
+//			ROS_INFO("tag YPR: %0.2f, %0.2f, %0.2f", landing_pad_yaw, landing_pad_pitch, landing_pad_roll);
+	/*
+			tf2::Quaternion rotation;
+			rotation.setRPY(roll, pitch, 0);
+
+			apriltag_camera_pose.pose.orientation = tf2::toMsg(rotation);
+	*/
 			landing_pad_camera_pose_publisher.publish(apriltag_camera_pose);
 
 			setpoint_x.data += -0.1 * apriltag_camera_pose.pose.position.x / apriltag_camera_pose.pose.position.z;
@@ -166,26 +193,25 @@ int main(int argc, char **argv)
 		// send transform
 		geometry_msgs::TransformStamped camera_transform_stamped;
 		camera_transform_stamped.header.stamp = ros::Time::now();
-		camera_transform_stamped.header.frame_id = "body_NEU";
-		camera_transform_stamped.child_frame_id  = "camera_frame";
+//		camera_transform_stamped.header.frame_id = "body_NEU";
+//		camera_transform_stamped.child_frame_id  = "camera_frame";
 
-/*
-		camera_transform_stamped.transform.translation.x = 0;
-		camera_transform_stamped.transform.translation.y = 0;
-		camera_transform_stamped.transform.translation.z = 0;
-*/
+		// changes
+		//*****************************************
+		camera_transform_stamped.header.frame_id = "camera_frame_straightened";
+//		camera_transform_stamped.header.frame_id = "camera_frame";
+		camera_transform_stamped.child_frame_id = "body";
+		//*****************************************
 
 		tf2::Quaternion camera_rotation;
-		camera_rotation.setRPY(0, gimbal_y_position, gimbal_x_position);
+		camera_rotation.setRPY(0, 0, gimbal_x_position - landing_pad_yaw);
+
+		//*****************************************
+		camera_rotation = camera_rotation.inverse();
+		//*****************************************
+
 		camera_transform_stamped.transform.rotation = tf2::toMsg(camera_rotation);
 
-/*
-		tf2::Quaternion camera_rotation_inverse = camera_rotation.inverse();
-		camera_transform_stamped.transform.rotation.w = camera_rotation_inverse.w();
-		camera_transform_stamped.transform.rotation.x = camera_rotation_inverse.x();
-		camera_transform_stamped.transform.rotation.y = camera_rotation_inverse.y();
-		camera_transform_stamped.transform.rotation.z = camera_rotation_inverse.z();
-*/		
 		transform_broadcaster.sendTransform(camera_transform_stamped);
 
 		loop_rate.sleep();
