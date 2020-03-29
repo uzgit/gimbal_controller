@@ -35,7 +35,7 @@ double whycon_roll;
 std_msgs::Float64 setpoint_x;
 std_msgs::Float64 setpoint_y;
 std_msgs::Bool idle_state_msg;
-double setpoint_scalar = 0.5;
+double setpoint_scalar = 0.75;
 
 ros::Publisher setpoint_publisher_x;
 ros::Publisher setpoint_publisher_y;
@@ -105,6 +105,25 @@ void apriltag_visual_callback(const apriltag_ros::AprilTagDetectionArray::ConstP
 			
 			apriltag_camera_pose = _apriltag_camera_pose;
 			apriltag_camera_pose_publisher.publish(apriltag_camera_pose);
+
+			// calculate landing pad position using apriltag
+			// generate transform
+			geometry_msgs::TransformStamped apriltag_camera_transform_stamped;
+			apriltag_camera_transform_stamped.header.stamp = ros::Time::now();
+			apriltag_camera_transform_stamped.child_frame_id = "camera_frame_apriltag_straightened";
+			apriltag_camera_transform_stamped.header.frame_id = "body_enu";
+
+			apriltag_camera_transform_stamped.transform.translation.y = -0.75;
+
+			// set rotation
+			tf2::Quaternion camera_rotation, inverse_camera_rotation;
+			camera_rotation.setRPY(0, 0, - gimbal_x_position + landing_pad_yaw);
+			inverse_camera_rotation = camera_rotation.inverse();
+			apriltag_camera_transform_stamped.transform.rotation = tf2::toMsg(inverse_camera_rotation);
+
+			// broadcast transform
+			static tf2_ros::TransformBroadcaster transform_broadcaster;
+			transform_broadcaster.sendTransform(apriltag_camera_transform_stamped);
 		}
 	}
 }
@@ -117,25 +136,17 @@ void whycon_visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg
 	_whycon_camera_pose.header.frame_id = "camera_frame_whycon";
 	_whycon_camera_pose.pose = msg->markers[0].pose;
 
-/*
-	_whycon_camera_pose.pose.position = msg->markers[0].pose.position;
-	_whycon_camera_pose.pose.orientation.w = 1;
-	_whycon_camera_pose.pose.orientation.x = 0;
-	_whycon_camera_pose.pose.orientation.y = 0;
-	_whycon_camera_pose.pose.orientation.z = 0;
-*/
-
 	if( ros::Time::now() - last_apriltag_detection_time >= detection_timeout )
 	{
 		// this sort of thing seems to work the best using PID systems on the x and y positions
 		setpoint_x.data += -setpoint_scalar * _whycon_camera_pose.pose.position.x / _whycon_camera_pose.pose.position.z;
 		setpoint_y.data +=  setpoint_scalar * _whycon_camera_pose.pose.position.y / _whycon_camera_pose.pose.position.z;
+		
+		setpoint_publisher_x.publish(setpoint_x);
+		setpoint_publisher_y.publish(setpoint_y);
+		idle_state_msg.data = false;
 
 	}
-
-	setpoint_publisher_x.publish(setpoint_x);
-	setpoint_publisher_y.publish(setpoint_y);
-	idle_state_msg.data = false;
 
 	last_whycon_detection_time = ros::Time::now();
 
@@ -144,10 +155,28 @@ void whycon_visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg
 	tf2::fromMsg(_whycon_camera_pose.pose.orientation, rotation);
 	tf2::Matrix3x3(rotation).getEulerYPR(whycon_yaw, whycon_pitch, whycon_roll);
 
-//	ROS_INFO("whycon id %3d YPR: <%0.2f, %0.2f, %0.2f>", msg->markers[0].id, yaw, pitch, roll);
-
+	// set global and publish
 	whycon_camera_pose = _whycon_camera_pose;
 	whycon_camera_pose_publisher.publish(whycon_camera_pose);
+
+	// calculate landing pad position using whycon
+	geometry_msgs::TransformStamped whycon_camera_transform_stamped;
+	whycon_camera_transform_stamped.header.stamp = ros::Time::now();
+	whycon_camera_transform_stamped.child_frame_id = "camera_frame_whycon_straightened";
+	whycon_camera_transform_stamped.header.frame_id = "body_enu";
+	// set rotation
+//		camera_rotation.setRPY(0, 0, - gimbal_x_position + whycon_yaw);
+	tf2::Quaternion camera_rotation;
+	camera_rotation.setRPY(0, 0, gimbal_x_position );
+//		tf2::Quaternion correction(0, 0, 1, 0);
+	tf2::Quaternion correction(1, 0, 0, 0);
+	tf2::Quaternion total_rotation = camera_rotation * correction;
+	tf2::Quaternion inverse_total_rotation = total_rotation.inverse();
+	whycon_camera_transform_stamped.transform.rotation = tf2::toMsg(inverse_total_rotation);
+
+	// broadcast transform
+	static tf2_ros::TransformBroadcaster transform_broadcaster;
+	transform_broadcaster.sendTransform(whycon_camera_transform_stamped);
 }
 
 int main(int argc, char **argv)
@@ -193,8 +222,8 @@ int main(int argc, char **argv)
 		last_detection_time = last_apriltag_detection_time;
 		
 		landing_pad_camera_pose = apriltag_camera_pose;
-
-		if( last_whycon_detection_time > last_apriltag_detection_time )
+		if( ros::Time::now() - last_apriltag_detection_time >= detection_timeout )
+//		if( last_whycon_detection_time > last_apriltag_detection_time )
 		{
 			last_detection_time = last_whycon_detection_time;
 			landing_pad_camera_pose = whycon_camera_pose;
@@ -215,41 +244,6 @@ int main(int argc, char **argv)
 
 			idle_state_publisher.publish(idle_state_msg);
 		}
-
-		// calculate landing pad position using apriltag
-		// generate transform
-		geometry_msgs::TransformStamped apriltag_camera_transform_stamped;
-		apriltag_camera_transform_stamped.header.stamp = ros::Time::now();
-		apriltag_camera_transform_stamped.header.frame_id = "camera_frame_apriltag_straightened";
-		apriltag_camera_transform_stamped.child_frame_id = "body_enu";
-
-		apriltag_camera_transform_stamped.transform.translation.y = -0.75;
-
-		// set rotation
-		tf2::Quaternion camera_rotation;
-		camera_rotation.setRPY(0, 0, - gimbal_x_position + landing_pad_yaw);
-		apriltag_camera_transform_stamped.transform.rotation = tf2::toMsg(camera_rotation);
-
-		// broadcast transform
-		transform_broadcaster.sendTransform(apriltag_camera_transform_stamped);
-
-
-
-		// calculate landing pad position using whycon
-		geometry_msgs::TransformStamped whycon_camera_transform_stamped;
-		whycon_camera_transform_stamped.header.stamp = ros::Time::now();
-		whycon_camera_transform_stamped.header.frame_id = "camera_frame_whycon_straightened";
-		whycon_camera_transform_stamped.child_frame_id = "body_enu";
-		// set rotation
-//		camera_rotation.setRPY(0, 0, - gimbal_x_position + whycon_yaw);
-		camera_rotation.setRPY(0, 0, gimbal_x_position );
-//		tf2::Quaternion correction(0, 0, 1, 0);
-		tf2::Quaternion correction(1, 0, 0, 0);
-		tf2::Quaternion total_rotation = camera_rotation * correction;
-		whycon_camera_transform_stamped.transform.rotation = tf2::toMsg(total_rotation);
-
-		// broadcast transform
-		transform_broadcaster.sendTransform(whycon_camera_transform_stamped);
 		
 		loop_rate.sleep();
 	}
