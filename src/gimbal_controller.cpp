@@ -246,6 +246,7 @@ int main(int argc, char **argv)
 	whycon_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/whycon_pose", 1000);
 	apriltag_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/apriltag_pose", 1000);
 	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
+	yaw_displacement_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/yaw_displacement", 1000);
 
 	// initialize transform broadcaster
 	static tf2_ros::TransformBroadcaster transform_broadcaster;
@@ -272,6 +273,21 @@ int main(int argc, char **argv)
 		{
 			last_detection_time = last_whycon_detection_time;
 			landing_pad_camera_pose = whycon_camera_pose;
+		}
+		else // if the detection is an apriltag then publish the yaw displacement
+		{
+			double yaw_temp = gimbal_x_position - landing_pad_yaw;
+
+			/*
+			if( abs(yaw_temp) > 3.1415926 )
+			{
+				yaw_temp = copysign(6.28 - abs(yaw_temp), gimbal_x_position);
+			}
+			*/
+
+//			yaw_displacement_publisher.publish( fmod(gimbal_x_position - landing_pad_yaw, 3.1415926) );
+			yaw_displacement_publisher.publish( yaw_temp );
+			ROS_INFO("ljdsflkdsjkfsd");
 		}
 
 		landing_pad_camera_pose_publisher.publish(landing_pad_camera_pose);

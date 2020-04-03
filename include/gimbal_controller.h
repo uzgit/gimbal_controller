@@ -48,6 +48,7 @@ ros::Publisher idle_state_publisher;
 ros::Publisher landing_pad_camera_pose_publisher;
 ros::Publisher whycon_camera_pose_publisher;
 ros::Publisher apriltag_camera_pose_publisher;
+ros::Publisher yaw_displacement_publisher;
 
 ros::Duration detection_timeout(2);
 ros::Time last_detection_time(0);
