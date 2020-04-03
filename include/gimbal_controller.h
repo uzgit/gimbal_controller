@@ -22,6 +22,8 @@
 #include <ctime>
 
 int landing_pad_id[2] = {1, 2};
+//int apriltag_offset = 0.75;
+int apriltag_offset = 1.75;
 
 double idle_setpoint_x = 0.0;
 double idle_setpoint_y = 0.4;
@@ -38,7 +40,7 @@ double whycon_roll;
 std_msgs::Float64 setpoint_x;
 std_msgs::Float64 setpoint_y;
 std_msgs::Bool idle_state_msg;
-double setpoint_scalar = 0.75;
+double setpoint_scalar = 0.25;
 
 ros::Publisher setpoint_publisher_x;
 ros::Publisher setpoint_publisher_y;
@@ -62,5 +64,6 @@ void gimbal_x_position_callback( const std_msgs::Float64::ConstPtr );
 void gimbal_y_position_callback( const std_msgs::Float64::ConstPtr );
 void apriltag_visual_callback( const apriltag_ros::AprilTagDetectionArray::ConstPtr& );
 void whycon_visual_callback( const visualization_msgs::MarkerArray::ConstPtr& );
+geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped& );
 
 #endif

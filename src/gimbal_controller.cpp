@@ -1,5 +1,81 @@
 #include <gimbal_controller.h>
 
+/*
+// remove rotation from a pose by rotating it by the inverse of its rotation
+geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped & _pose_in )
+{
+	// declare pose variables
+	geometry_msgs::PoseStamped pose_out;
+	geometry_msgs::PoseStamped pose_in = _pose_in;
+
+	// access the transform broadcaster
+	static tf2_ros::TransformBroadcaster transform_broadcaster;
+
+	// declare a message in which to store the new transform
+	geometry_msgs::TransformStamped transform_stamped_message;
+
+	// set the transform's header
+	transform_stamped_message.header.stamp = ros::Time::now();
+	// make the parent frame_id equal to the child's frame_id with '_straightened' appended
+	transform_stamped_message.header.frame_id = pose_in.header.frame_id + "_straightened";
+	transform_stamped_message.child_frame_id = pose_in.header.frame_id;
+
+	// invert the rotation
+	tf2::Quaternion rotation, inverse_rotation;
+	tf2::fromMsg(pose_in.pose.orientation, rotation);
+	inverse_rotation = rotation.inverse();
+
+	// set the rotation from the parent to the child
+	transform_stamped_message.transform.rotation = tf2::toMsg(inverse_rotation);
+//	transform_stamped_message.transform.rotation = pose_in.pose.orientation;
+
+	// send the transform
+	transform_broadcaster.sendTransform(transform_stamped_message);
+
+	transform_buffer.setUsingDedicatedThread(true);
+	// transform the pose and return it
+	return transform_buffer.transform(pose_in, transform_stamped_message.header.frame_id, ros::Duration(0.05));
+}
+*/
+
+// remove rotation from a pose by rotating it by the inverse of its rotation
+void generate_transform_straightened( const geometry_msgs::PoseStamped & _pose_in )
+{
+	// declare pose variables
+	geometry_msgs::PoseStamped pose_out;
+	geometry_msgs::PoseStamped pose_in = _pose_in;
+
+	// access the transform broadcaster
+	static tf2_ros::TransformBroadcaster transform_broadcaster;
+
+	// declare a message in which to store the new transform
+	geometry_msgs::TransformStamped transform_stamped_message;
+
+	// set the transform's header
+	transform_stamped_message.header.stamp = ros::Time::now();
+	// make the parent frame_id equal to the child's frame_id with '_straightened' appended
+	transform_stamped_message.header.frame_id = pose_in.header.frame_id + "_straightened";
+	transform_stamped_message.child_frame_id = pose_in.header.frame_id;
+
+	// invert the rotation
+	tf2::Quaternion rotation, inverse_rotation;
+	tf2::fromMsg(pose_in.pose.orientation, rotation);
+	inverse_rotation = rotation.inverse();
+
+	// set the rotation from the parent to the child
+	transform_stamped_message.transform.rotation = tf2::toMsg(inverse_rotation);
+//	transform_stamped_message.transform.rotation = pose_in.pose.orientation;
+
+	// send the transform
+	transform_broadcaster.sendTransform(transform_stamped_message);
+
+	/*
+	transform_buffer.setUsingDedicatedThread(true);
+	// transform the pose and return it
+	return transform_buffer.transform(pose_in, transform_stamped_message.header.frame_id, ros::Duration(0.05));
+	*/
+}
+
 void gimbal_x_position_callback(const std_msgs::Float64::ConstPtr msg)
 {
 	gimbal_x_position = msg->data;
@@ -58,7 +134,8 @@ void apriltag_visual_callback(const apriltag_ros::AprilTagDetectionArray::ConstP
 			apriltag_camera_transform_stamped.child_frame_id = "camera_frame_apriltag_straightened";
 			apriltag_camera_transform_stamped.header.frame_id = "body_enu";
 
-			apriltag_camera_transform_stamped.transform.translation.y = -0.75;
+			apriltag_camera_transform_stamped.transform.translation.x = - sin(-gimbal_x_position + landing_pad_yaw + 3.1415926) * apriltag_offset;
+			apriltag_camera_transform_stamped.transform.translation.y = - cos(-gimbal_x_position + landing_pad_yaw + 3.1415926) * apriltag_offset;
 
 			// set rotation
 			tf2::Quaternion camera_rotation, inverse_camera_rotation;
@@ -69,6 +146,17 @@ void apriltag_visual_callback(const apriltag_ros::AprilTagDetectionArray::ConstP
 			// broadcast transform
 			static tf2_ros::TransformBroadcaster transform_broadcaster;
 			transform_broadcaster.sendTransform(apriltag_camera_transform_stamped);
+
+			try
+			{
+				generate_transform_straightened(apriltag_camera_pose);
+//				straighten_pose(apriltag_camera_pose);
+			}
+			catch( const std::exception & e )
+			{
+				ROS_WARN("Exception in apriltag callback (gimbal_controller)");
+				ROS_INFO_STREAM(e.what());
+			}
 		}
 	}
 }
@@ -122,6 +210,17 @@ void whycon_visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg
 	// broadcast transform
 	static tf2_ros::TransformBroadcaster transform_broadcaster;
 	transform_broadcaster.sendTransform(whycon_camera_transform_stamped);
+
+	try
+	{
+		generate_transform_straightened(whycon_camera_pose);
+//		straighten_pose(whycon_camera_pose);
+	}
+	catch( const std::exception & e )
+	{
+		ROS_WARN("Exception in whycon callback (gimbal_controller)");
+		ROS_INFO_STREAM(e.what());
+	}
 }
 
 int main(int argc, char **argv)
@@ -163,6 +262,7 @@ int main(int argc, char **argv)
 	while( ros::ok() )
 	{
 		ros::spinOnce();
+
 
 		last_detection_time = last_apriltag_detection_time;
 		
