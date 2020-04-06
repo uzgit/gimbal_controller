@@ -134,8 +134,17 @@ void apriltag_visual_callback(const apriltag_ros::AprilTagDetectionArray::ConstP
 			apriltag_camera_transform_stamped.child_frame_id = "camera_frame_apriltag_straightened";
 			apriltag_camera_transform_stamped.header.frame_id = "body_enu";
 
+			double theta_raw = -gimbal_x_position + landing_pad_yaw + 3.1415926;
+
+/*
 			apriltag_camera_transform_stamped.transform.translation.x = - sin(-gimbal_x_position + landing_pad_yaw + 3.1415926) * apriltag_offset;
 			apriltag_camera_transform_stamped.transform.translation.y = - cos(-gimbal_x_position + landing_pad_yaw + 3.1415926) * apriltag_offset;
+*/
+			apriltag_camera_transform_stamped.transform.translation.x = - sin(theta_raw) * apriltag_offset;
+			apriltag_camera_transform_stamped.transform.translation.y = - cos(theta_raw) * apriltag_offset;
+
+			double theta = sin(theta_raw) > 0 ? acos( cos(theta_raw) ) : -acos( cos(theta_raw) );
+			yaw_displacement_publisher.publish(theta);
 
 			// set rotation
 			tf2::Quaternion camera_rotation, inverse_camera_rotation;
@@ -268,11 +277,13 @@ int main(int argc, char **argv)
 		last_detection_time = last_apriltag_detection_time;
 		
 		landing_pad_camera_pose = apriltag_camera_pose;
-		if( ros::Time::now() - last_apriltag_detection_time >= detection_timeout )
+		if( (ros::Time::now() - last_apriltag_detection_time >= detection_timeout) || (abs(apriltag_camera_pose.pose.position.z) > 6) )
 //		if( last_whycon_detection_time > last_apriltag_detection_time )
 		{
 			last_detection_time = last_whycon_detection_time;
 			landing_pad_camera_pose = whycon_camera_pose;
+
+			ROS_INFO("Using WhyCon");
 		}
 		else // if the detection is an apriltag then publish the yaw displacement
 		{
@@ -287,7 +298,7 @@ int main(int argc, char **argv)
 
 //			yaw_displacement_publisher.publish( fmod(gimbal_x_position - landing_pad_yaw, 3.1415926) );
 			yaw_displacement_publisher.publish( yaw_temp );
-			ROS_INFO("ljdsflkdsjkfsd");
+			ROS_INFO("Using April Tag");
 		}
 
 		landing_pad_camera_pose_publisher.publish(landing_pad_camera_pose);
