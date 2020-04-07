@@ -283,11 +283,11 @@ int main(int argc, char **argv)
 			last_detection_time = last_whycon_detection_time;
 			landing_pad_camera_pose = whycon_camera_pose;
 
-			ROS_INFO("Using WhyCon");
 		}
 		else // if the detection is an apriltag then publish the yaw displacement
 		{
-			double yaw_temp = gimbal_x_position - landing_pad_yaw;
+			;
+//			double yaw_temp = gimbal_x_position - landing_pad_yaw;
 
 			/*
 			if( abs(yaw_temp) > 3.1415926 )
@@ -297,8 +297,7 @@ int main(int argc, char **argv)
 			*/
 
 //			yaw_displacement_publisher.publish( fmod(gimbal_x_position - landing_pad_yaw, 3.1415926) );
-			yaw_displacement_publisher.publish( yaw_temp );
-			ROS_INFO("Using April Tag");
+//			yaw_displacement_publisher.publish( yaw_temp );
 		}
 
 		landing_pad_camera_pose_publisher.publish(landing_pad_camera_pose);

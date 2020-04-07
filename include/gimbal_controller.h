@@ -22,8 +22,8 @@
 #include <ctime>
 
 int landing_pad_id[2] = {1, 2};
-//int apriltag_offset = 0.75;
-int apriltag_offset = 1.75;
+double apriltag_offset = 0.75;
+//int apriltag_offset = 1;
 
 double idle_setpoint_x = 0.0;
 double idle_setpoint_y = 0.4;
