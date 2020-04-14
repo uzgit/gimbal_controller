@@ -102,6 +102,7 @@ void apriltag_visual_callback(const apriltag_ros::AprilTagDetectionArray::ConstP
 
 			// copy the pose into a PoseStamped message and publish
 			geometry_msgs::PoseWithCovarianceStamped buffer = detection.pose;
+
 			geometry_msgs::PoseStamped _apriltag_camera_pose;
 			_apriltag_camera_pose.pose = buffer.pose.pose;
 			_apriltag_camera_pose.header.stamp = ros::Time::now();
@@ -126,6 +127,18 @@ void apriltag_visual_callback(const apriltag_ros::AprilTagDetectionArray::ConstP
 			
 			apriltag_camera_pose = _apriltag_camera_pose;
 			apriltag_camera_pose_publisher.publish(apriltag_camera_pose);
+
+			// publish odometry for ekf
+/*
+			apriltag_odometry_message.header = buffer.header;
+			apriltag_odometry_message.child_frame_id = "body_enu";
+			apriltag_odometry_message.pose = buffer.pose;
+			for(int index = 0; index < 36; index += 6)
+			{
+				apriltag_odometry_message.pose.covariance[index] = 0.1;
+			}
+			vo_publisher.publish(apriltag_odometry_message);
+*/
 
 			// calculate landing pad position using apriltag
 			// generate transform
@@ -256,6 +269,7 @@ int main(int argc, char **argv)
 	apriltag_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/apriltag_pose", 1000);
 	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
 	yaw_displacement_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/yaw_displacement", 1000);
+	vo_publisher = node_handle.advertise<nav_msgs::Odometry>("/vo", 1000);
 
 	// initialize transform broadcaster
 	static tf2_ros::TransformBroadcaster transform_broadcaster;
@@ -265,6 +279,22 @@ int main(int argc, char **argv)
 	setpoint_y.data = idle_setpoint_y;
 	setpoint_publisher_x.publish(setpoint_x);
 	setpoint_publisher_y.publish(setpoint_y);
+
+	transform_buffer.setUsingDedicatedThread(true);
+
+	ros::Time initial = ros::Time::now();
+	ros::Duration duration(0.5);
+	while( ros::Time::now() - initial < duration )
+	{
+		idle_state_msg.data = false;
+		idle_state_publisher.publish(idle_state_msg);
+		
+		setpoint_publisher_x.publish(idle_setpoint_x);
+		setpoint_publisher_y.publish(idle_setpoint_y);
+		
+		idle_state_msg.data = true;
+		idle_state_publisher.publish(idle_state_msg);
+	}
 
 	// timing
 	ros::Duration detection_fail_timeout(2.0);
@@ -277,11 +307,15 @@ int main(int argc, char **argv)
 		last_detection_time = last_apriltag_detection_time;
 		
 		landing_pad_camera_pose = apriltag_camera_pose;
-		if( (ros::Time::now() - last_apriltag_detection_time >= detection_timeout) || (abs(apriltag_camera_pose.pose.position.z) > 6) )
+		if( (ros::Time::now() - last_apriltag_detection_time >= detection_timeout) || (abs(apriltag_camera_pose.pose.position.z) > 4) )
 //		if( last_whycon_detection_time > last_apriltag_detection_time )
 		{
 			last_detection_time = last_whycon_detection_time;
 			landing_pad_camera_pose = whycon_camera_pose;
+			landing_pad_camera_pose.pose.orientation.w = 1;
+			landing_pad_camera_pose.pose.orientation.x = 0;
+			landing_pad_camera_pose.pose.orientation.y = 0;
+			landing_pad_camera_pose.pose.orientation.z = 0;
 
 		}
 		else // if the detection is an apriltag then publish the yaw displacement

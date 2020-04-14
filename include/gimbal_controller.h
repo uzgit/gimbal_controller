@@ -6,6 +6,7 @@
 #include <geometry_msgs/Pose.h>
 #include <gazebo_msgs/LinkState.h>
 #include <gazebo_msgs/LinkStates.h>
+#include <nav_msgs/Odometry.h>
 #include <sensor_msgs/Imu.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float64.h>
@@ -40,7 +41,7 @@ double whycon_roll;
 std_msgs::Float64 setpoint_x;
 std_msgs::Float64 setpoint_y;
 std_msgs::Bool idle_state_msg;
-double setpoint_scalar = 0.25;
+double setpoint_scalar = 0.5;
 
 ros::Publisher setpoint_publisher_x;
 ros::Publisher setpoint_publisher_y;
@@ -49,6 +50,8 @@ ros::Publisher landing_pad_camera_pose_publisher;
 ros::Publisher whycon_camera_pose_publisher;
 ros::Publisher apriltag_camera_pose_publisher;
 ros::Publisher yaw_displacement_publisher;
+ros::Publisher landing_pad_relative_pose_publisher;
+ros::Publisher vo_publisher;
 
 ros::Duration detection_timeout(2);
 ros::Time last_detection_time(0);
@@ -60,11 +63,16 @@ tf2_ros::Buffer transform_buffer;
 geometry_msgs::PoseStamped whycon_camera_pose;
 geometry_msgs::PoseStamped apriltag_camera_pose;
 geometry_msgs::PoseStamped landing_pad_camera_pose;
+geometry_msgs::PoseStamped landing_pad_relative_pose;
 
 void gimbal_x_position_callback( const std_msgs::Float64::ConstPtr );
 void gimbal_y_position_callback( const std_msgs::Float64::ConstPtr );
 void apriltag_visual_callback( const apriltag_ros::AprilTagDetectionArray::ConstPtr& );
 void whycon_visual_callback( const visualization_msgs::MarkerArray::ConstPtr& );
+
 geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped& );
+
+nav_msgs::Odometry apriltag_odometry_message;
+nav_msgs::Odometry whycon_odometry_message;
 
 #endif
