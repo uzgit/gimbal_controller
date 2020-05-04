@@ -38,6 +38,14 @@ geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped & _
 }
 */
 
+void imu_callback(const sensor_msgs::Imu::ConstPtr& msg)
+{
+	tf2::Quaternion rotation;
+	tf2::fromMsg(msg->orientation, rotation);
+	tf2::Matrix3x3(rotation).getEulerYPR(body_yaw, body_pitch, body_roll);
+}
+
+
 // remove rotation from a pose by rotating it by the inverse of its rotation
 void generate_transform_straightened( const geometry_msgs::PoseStamped & _pose_in )
 {
@@ -117,6 +125,30 @@ void apriltag_visual_callback(const apriltag_ros::AprilTagDetectionArray::ConstP
 			setpoint_x.data += -setpoint_scalar * _apriltag_camera_pose.pose.position.x / _apriltag_camera_pose.pose.position.z;
 			setpoint_y.data +=  setpoint_scalar * _apriltag_camera_pose.pose.position.y / _apriltag_camera_pose.pose.position.z;
 
+			if( setpoint_x.data < -1.5708 )
+			{
+				setpoint_x.data = -1.5708;
+			}
+			else if( setpoint_x.data > 1.5708 )
+			{
+				setpoint_x.data = 1.5708;
+			}
+
+			if( setpoint_y.data < 0 )
+			{
+				setpoint_y.data = 0;
+			}
+			else if( setpoint_y.data > 3.1416 )
+			{
+				setpoint_y.data = 3.1416;
+			}
+/*
+			setpoint_x.data = std::min(setpoint_x.data,  1.5708);
+			setpoint_x.data = std::max(setpoint_x.data, -1.5708);
+			setpoint_y.data = std::min(setpoint_y.data,  3.1416);
+			setpoint_y.data = std::max(setpoint_y.data,  0);
+*/
+
 			// publish setpoints and idle state
 			setpoint_publisher_x.publish(setpoint_x);
 			setpoint_publisher_y.publish(setpoint_y);
@@ -162,6 +194,7 @@ void apriltag_visual_callback(const apriltag_ros::AprilTagDetectionArray::ConstP
 			// set rotation
 			tf2::Quaternion camera_rotation, inverse_camera_rotation;
 			camera_rotation.setRPY(0, 0, - gimbal_x_position + landing_pad_yaw);
+//			camera_rotation.setRPY(body_roll, body_pitch, - gimbal_x_position + landing_pad_yaw);
 			inverse_camera_rotation = camera_rotation.inverse();
 			apriltag_camera_transform_stamped.transform.rotation = tf2::toMsg(inverse_camera_rotation);
 
@@ -191,8 +224,11 @@ void whycon_visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg
 	_whycon_camera_pose.header.frame_id = "camera_frame_whycon";
 	_whycon_camera_pose.pose = msg->markers[0].pose;
 
+	// aim the camera
 	if( ros::Time::now() - last_apriltag_detection_time >= detection_timeout )
 	{
+		// setpoint_x is the target yaw of the camera
+		// setpoint_y is the target pitch of the camera
 		// this sort of thing seems to work the best using PID systems on the x and y positions
 		setpoint_x.data += -setpoint_scalar * _whycon_camera_pose.pose.position.x / _whycon_camera_pose.pose.position.z;
 		setpoint_y.data +=  setpoint_scalar * _whycon_camera_pose.pose.position.y / _whycon_camera_pose.pose.position.z;
@@ -200,14 +236,26 @@ void whycon_visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg
 		setpoint_publisher_x.publish(setpoint_x);
 		setpoint_publisher_y.publish(setpoint_y);
 		idle_state_msg.data = false;
-
 	}
-
 	last_whycon_detection_time = ros::Time::now();
 
-	double yaw, pitch, roll;
-	tf2::Quaternion rotation;
+	// ***********************************************************************************
+	// maintain continuity in WhyCon orientation
+	tf2::Quaternion rotation, current_inverse_rotation, previous_rotation, difference;
 	tf2::fromMsg(_whycon_camera_pose.pose.orientation, rotation);
+	current_inverse_rotation = rotation.inverse();
+	tf2::fromMsg(previous_whycon_camera_pose.pose.orientation, previous_rotation);
+
+	difference = previous_rotation * current_inverse_rotation;
+	if( difference.getAngle() < 0.001 )// < 0.0349066 ) // 2 deg
+	{
+		rotation = current_inverse_rotation;
+		_whycon_camera_pose.pose.orientation = tf2::toMsg(current_inverse_rotation);
+//		ROS_WARN("ffsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfsfsdjkfldsjfkldsjfkldsjklfssdjkfldsjfkldsjfkldsjklfsd");
+	}
+	// ***********************************************************************************
+
+	double yaw, pitch, roll;
 	tf2::Matrix3x3(rotation).getEulerYPR(whycon_yaw, whycon_pitch, whycon_roll);
 
 	// set global and publish
@@ -223,6 +271,7 @@ void whycon_visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg
 //		camera_rotation.setRPY(0, 0, - gimbal_x_position + whycon_yaw);
 	tf2::Quaternion camera_rotation;
 	camera_rotation.setRPY(0, 0, gimbal_x_position );
+//	camera_rotation.setRPY(-body_roll, -body_pitch, gimbal_x_position );
 //		tf2::Quaternion correction(0, 0, 1, 0);
 	tf2::Quaternion correction(1, 0, 0, 0);
 	tf2::Quaternion total_rotation = camera_rotation * correction;
@@ -243,6 +292,8 @@ void whycon_visual_callback(const visualization_msgs::MarkerArray::ConstPtr& msg
 		ROS_WARN("Exception in whycon callback (gimbal_controller)");
 		ROS_INFO_STREAM(e.what());
 	}
+
+	previous_whycon_camera_pose = whycon_camera_pose;
 }
 
 int main(int argc, char **argv)
@@ -257,7 +308,8 @@ int main(int argc, char **argv)
 	ros::Subscriber apriltag_visual_subscriber	= node_handle.subscribe("/tag_detections",	1000, apriltag_visual_callback	);
 	ros::Subscriber gimbal_x_position_subscriber	= node_handle.subscribe("/gimbal/x/position",	1000, gimbal_x_position_callback);
 	ros::Subscriber gimbal_y_position_subscriber	= node_handle.subscribe("/gimbal/y/position",	1000, gimbal_y_position_callback);
-	
+	ros::Subscriber imu_subscriber			= node_handle.subscribe("/imu", 		1000, imu_callback);
+
 	// publisher to set the states of the current gimbal PID control values
 	setpoint_publisher_x = node_handle.advertise<std_msgs::Float64>("/gimbal/x/setpoint",	1000);
 	setpoint_publisher_y = node_handle.advertise<std_msgs::Float64>("/gimbal/y/setpoint",	1000);

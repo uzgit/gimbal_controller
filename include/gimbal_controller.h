@@ -21,6 +21,7 @@
 
 #include <cmath>
 #include <ctime>
+#include <algorithm>
 
 int landing_pad_id[2] = {1, 2};
 double apriltag_offset = 0.75;
@@ -37,6 +38,10 @@ double landing_pad_roll;
 double whycon_yaw;
 double whycon_pitch;
 double whycon_roll;
+
+double body_pitch;
+double body_roll;
+double body_yaw;
 
 std_msgs::Float64 setpoint_x;
 std_msgs::Float64 setpoint_y;
@@ -61,6 +66,7 @@ ros::Time last_whycon_detection_time(0);
 tf2_ros::Buffer transform_buffer;
 
 geometry_msgs::PoseStamped whycon_camera_pose;
+geometry_msgs::PoseStamped previous_whycon_camera_pose;
 geometry_msgs::PoseStamped apriltag_camera_pose;
 geometry_msgs::PoseStamped landing_pad_camera_pose;
 geometry_msgs::PoseStamped landing_pad_relative_pose;
