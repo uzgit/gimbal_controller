@@ -31,7 +31,7 @@ void state_callback(const mavros_msgs::State::ConstPtr& msg)
 // normalize a pixel position from [0, range_max] into [-1.0, 1.0] for PID control
 double normalize_pixel_position(double pixel_position, double range_max)
 {
-	double range = range_max / 2.0;
+	double range  = range_max / 2.0;
 	double result = (pixel_position - range) / range;
 
 	return result;
@@ -57,6 +57,9 @@ void send_rc_control(int tilt_control_effort, int pan_control_effort)
 	override_rc_in_message.channels[PAN_CHANNEL - 1] =  pan_control_effort;
 
 	override_rc_in_publisher.publish(override_rc_in_message);
+	
+	new_tilt_data = false;
+	new_pan_data = false;
 }
 
 void camera_control_effort_x_callback(const std_msgs::Float64::ConstPtr& msg)
@@ -64,6 +67,7 @@ void camera_control_effort_x_callback(const std_msgs::Float64::ConstPtr& msg)
 	camera_pid_control_effort_x.data = msg->data;
 
 	pan_pwm = control_effort_to_pwm_signal(camera_pid_control_effort_x.data);
+	new_pan_data = true;
 }
 
 void camera_control_effort_y_callback(const std_msgs::Float64::ConstPtr& msg)
@@ -71,6 +75,7 @@ void camera_control_effort_y_callback(const std_msgs::Float64::ConstPtr& msg)
 	camera_pid_control_effort_y.data = msg->data;
 
 	tilt_pwm = control_effort_to_pwm_signal(camera_pid_control_effort_y.data);
+	new_tilt_data = true;
 }
 
 // remove rotation from a pose by rotating it by the inverse of its rotation
@@ -113,7 +118,7 @@ void generate_transform_straightened( const geometry_msgs::PoseStamped & _pose_i
 
 void whycon_visual_callback(const whycon_ros::MarkerArray::ConstPtr& msg)
 {
-	ROS_INFO("In whycon visual callback!");
+//	ROS_INFO("In whycon visual callback!");
 
 	// capture the pose
 	geometry_msgs::PoseStamped _whycon_camera_pose;	
@@ -134,9 +139,15 @@ void whycon_visual_callback(const whycon_ros::MarkerArray::ConstPtr& msg)
 		camera_pid_setpoint_x_publisher.publish(camera_pid_setpoint_x);
 		camera_pid_setpoint_y_publisher.publish(camera_pid_setpoint_y);
 
-		send_rc_control(tilt_pwm, pan_pwm);
-		calculate_camera_angles();
-		idle_state_msg.data = false;
+		string_message.data = "whycon";
+		marker_type_publisher.publish(string_message);
+		
+		if( new_tilt_data && new_pan_data )
+		{
+			send_rc_control(tilt_pwm, pan_pwm);
+			calculate_camera_angles();
+			idle_state_msg.data = false;
+		}
 	}
 	last_whycon_detection_time = ros::Time::now();
 	
@@ -157,7 +168,8 @@ void whycon_visual_callback(const whycon_ros::MarkerArray::ConstPtr& msg)
 	// set rotation
 //		camera_rotation.setRPY(0, 0, - gimbal_x_position + whycon_yaw);
 	tf2::Quaternion camera_rotation;
-	camera_rotation.setRPY(0, 0, gimbal_x_position );
+//	camera_rotation.setRPY(0, 0, gimbal_x_position );
+	camera_rotation.setRPY(0, 0, pan_angle );
 //	camera_rotation.setRPY(-body_roll, -body_pitch, gimbal_x_position );
 //		tf2::Quaternion correction(0, 0, 1, 0);
 	tf2::Quaternion correction(1, 0, 0, 0);
@@ -193,6 +205,9 @@ int main(int argc, char **argv)
 	std_msgs_true.data = true;
 
 	// initialize subscribers
+//	ros::Subscriber apriltag_visual_subscriber	= node_handle.subscribe("/tag_detections",	1000, apriltag_visual_callback	);
+//	ros::Subscriber apriltag_u_subscriber		= node_handle.subscribe("/apriltag_u",		1000, apriltag_u_callback	);
+//	ros::Subscriber apriltag_v_subscriber		= node_handle.subscribe("/apriltag_v",		1000, apriltag_v_callback	);
 	ros::Subscriber whycon_visual_subscriber	= node_handle.subscribe("/whycon_ros/markers",	1000, whycon_visual_callback	);
 	ros::Subscriber pid_x_control_effort_subscriber = node_handle.subscribe("/pid/camera/control_effort/x", 1000, camera_control_effort_x_callback);
 	ros::Subscriber pid_y_control_effort_subscriber = node_handle.subscribe("/pid/camera/control_effort/y", 1000, camera_control_effort_y_callback);
@@ -216,6 +231,7 @@ int main(int argc, char **argv)
 	}
 
 	// publisher to share the pose of the landing pad within the camera frame
+	marker_type_publisher = node_handle.advertise<std_msgs::String>("/landing_pad/current_marker_type", 1000);
 	whycon_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/whycon_pose", 1000);
 	apriltag_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/apriltag_pose", 1000);
 	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);

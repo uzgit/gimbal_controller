@@ -2,6 +2,9 @@
 
 <launch>
 
+	<include file="$(find gscam)/v4l.launch" />
+	<include file="$(find whycon_ros)/launch/whycon.launch" />
+
         <node respawn="true" name="pid_x" pkg="pid" type="controller" ns="pid" output="log">
                 <param name="node_name" value="pid_x"/>
                 <param name="Kp" value="-0.4"/>

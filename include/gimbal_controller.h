@@ -5,8 +5,6 @@
 #include "ros/ros.h"
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/Pose.h>
-#include <gazebo_msgs/LinkState.h>
-#include <gazebo_msgs/LinkStates.h>
 #include <mavros_msgs/OverrideRCIn.h>
 #include <mavros_msgs/State.h>
 #include <nav_msgs/Odometry.h>
@@ -20,8 +18,6 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <whycon_ros/MarkerArray.h>
-
-#include <apriltag_ros/AprilTagDetectionArray.h>
 
 #include <cmath>
 #include <ctime>
@@ -47,6 +43,10 @@ double body_pitch;
 double body_roll;
 double body_yaw;
 
+double apriltag_u;
+double apriltag_v;
+
+std_msgs::String  string_message;
 std_msgs::Float64 landing_pad_pixel_position_x;
 std_msgs::Float64 landing_pad_pixel_position_y;
 std_msgs::Float64 camera_pid_control_effort_x;
@@ -61,17 +61,22 @@ std_msgs::Bool camera_pid_y_enable;
 double setpoint_scalar = 0.75;
 
 // these may actually change through the course of execution so they need to be actual variables
-double camera_pixel_height = 640;
-double camera_pixel_width  = 480;
+//double camera_pixel_height = 3820;
+//double camera_pixel_width  = 2464;
+double camera_pixel_height = 480;
+double camera_pixel_width  = 640;
 
 int tilt_idle_pwm = 1350;
 int pan_idle_pwm  = 1500;
 int tilt_pwm = tilt_idle_pwm;
 int pan_pwm  = pan_idle_pwm;
+bool new_tilt_data = false;
+bool new_pan_data = false;
+bool new_data = false;
 
 #define PWM_MIN 1100
 #define PWM_MAX 1900
-#define TILT_CHANNEL 7
+#define TILT_CHANNEL 6
 #define PAN_CHANNEL  8
 //int pan_channel  = 6;
 //int tilt_channel = 8;
@@ -86,6 +91,7 @@ double tilt_angle = 0;
 mavros_msgs::OverrideRCIn override_rc_in_message;
 mavros_msgs::State state;
 
+ros::Publisher marker_type_publisher;
 ros::Publisher setpoint_publisher_x;
 ros::Publisher setpoint_publisher_y;
 ros::Publisher landing_pad_pixel_position_x_publisher;
@@ -122,7 +128,6 @@ geometry_msgs::PoseStamped landing_pad_relative_pose;
 
 void gimbal_x_position_callback( const std_msgs::Float64::ConstPtr );
 void gimbal_y_position_callback( const std_msgs::Float64::ConstPtr );
-void apriltag_visual_callback( const apriltag_ros::AprilTagDetectionArray::ConstPtr& );
 void whycon_visual_callback( const whycon_ros::MarkerArray::ConstPtr& );
 
 geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped& );

@@ -8,7 +8,6 @@ add_compile_options(-std=c++11)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  gazebo_msgs
   geometry_msgs
   message_generation
   message_runtime
@@ -77,7 +76,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate added messages and services with any dependencies listed here
 # generate_messages(
 #   DEPENDENCIES
-#   gazebo_msgs#   geometry_msgs#   visualization_msgs
+#   geometry_msgs#   visualization_msgs
 # )
 
 ################################################
@@ -112,7 +111,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
 #  LIBRARIES gimbal_controller
-  CATKIN_DEPENDS gazebo_msgs geometry_msgs message_generation message_runtime roscpp visualization_msgs
+  CATKIN_DEPENDS geometry_msgs message_generation message_runtime roscpp visualization_msgs
   DEPENDS system_lib
 )
 
