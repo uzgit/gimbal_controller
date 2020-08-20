@@ -118,7 +118,12 @@ void generate_transform_straightened( const geometry_msgs::PoseStamped & _pose_i
 
 void whycon_visual_callback(const whycon_ros::MarkerArray::ConstPtr& msg)
 {
-//	ROS_INFO("In whycon visual callback!");
+	if( msg->markers[0].id != 1 && msg->markers[0].id != 2 )
+	{
+		return;
+	}
+	
+	//	ROS_INFO("In whycon visual callback!");
 
 	// capture the pose
 	geometry_msgs::PoseStamped _whycon_camera_pose;	
