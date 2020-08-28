@@ -17,7 +17,7 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
 
-#include <apriltag_ros/AprilTagDetectionArray.h>
+#include <whycon_ros/MarkerArray.h>
 
 #include <cmath>
 #include <ctime>
@@ -53,7 +53,6 @@ ros::Publisher setpoint_publisher_y;
 ros::Publisher idle_state_publisher;
 ros::Publisher landing_pad_camera_pose_publisher;
 ros::Publisher whycon_camera_pose_publisher;
-ros::Publisher apriltag_camera_pose_publisher;
 ros::Publisher yaw_displacement_publisher;
 ros::Publisher landing_pad_relative_pose_publisher;
 ros::Publisher vo_publisher;
@@ -67,18 +66,15 @@ tf2_ros::Buffer transform_buffer;
 
 geometry_msgs::PoseStamped whycon_camera_pose;
 geometry_msgs::PoseStamped previous_whycon_camera_pose;
-geometry_msgs::PoseStamped apriltag_camera_pose;
 geometry_msgs::PoseStamped landing_pad_camera_pose;
 geometry_msgs::PoseStamped landing_pad_relative_pose;
 
 void gimbal_x_position_callback( const std_msgs::Float64::ConstPtr );
 void gimbal_y_position_callback( const std_msgs::Float64::ConstPtr );
-void apriltag_visual_callback( const apriltag_ros::AprilTagDetectionArray::ConstPtr& );
-void whycon_visual_callback( const visualization_msgs::MarkerArray::ConstPtr& );
+void whycon_visual_callback( const whycon_ros::MarkerArray::ConstPtr& );
 
 geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped& );
 
-nav_msgs::Odometry apriltag_odometry_message;
 nav_msgs::Odometry whycon_odometry_message;
 
 #endif
