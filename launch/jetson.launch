@@ -2,20 +2,14 @@
 
 <launch>
 
-	<include file="$(find gscam)/v4l.launch" />
-	<include file="$(find whycon_ros)/launch/whycon.launch" />
-
         <node respawn="true" name="pid_x" pkg="pid" type="controller" ns="pid" output="log">
                 <param name="node_name" value="pid_x"/>
-                <param name="Kp" value="-0.1"/>
-                <param name="Ki" value="-0.2"/>
-                <param name="Kd" value="-0.1"/>
+                <param name="Kp" value="0.25"/>
+                <param name="Ki" value="0.55"/>
+                <param name="Kd" value="0.025"/>
                 <param name="upper_limit" value="1.0"/>
                 <param name="lower_limit" value="-1.0"/>
                 <param name="windup_limit" value="1.0"/>
-                <!--param name="upper_limit" value="1900"/>
-                <param name="lower_limit" value="1100"/>
-                <param name="windup_limit" value="200"/-->
                 <param name="max_loop_frequency" value="100.0"/>
                 <param name="min_loop_frequency" value="100.0"/>
                 <remap from="state" to="/landing_pad/pixel_position/x"/>
@@ -27,15 +21,13 @@
 
         <node respawn="true" name="pid_y" pkg="pid" type="controller" ns="pid" output="log">
                 <param name="node_name" value="pid_y"/>
-                <param name="Kp" value="0.1"/>
-                <param name="Ki" value="0.2"/>
-                <param name="Kd" value="0.1"/>
+                <param name="Kp" value="-0.15"/>
+                <!--param name="Ki" value="-0.30"/-->
+                <param name="Ki" value="-0.55"/>
+                <param name="Kd" value="-0.025"/>
                 <param name="upper_limit" value="1.0"/>
                 <param name="lower_limit" value="-1.0"/>
                 <param name="windup_limit" value="1.0"/>
-                <!--param name="upper_limit" value="1900"/>
-                <param name="lower_limit" value="1100"/>
-                <param name="windup_limit" value="200"/-->
                 <param name="max_loop_frequency" value="100.0"/>
                 <param name="min_loop_frequency" value="100.0"/>
                 <remap from="state" to="/landing_pad/pixel_position/y"/>
@@ -46,31 +38,5 @@
         </node>
 
 	<node respawn="true" name="gimbal_controller" pkg="gimbal_controller" type="gimbal_controller" />
-	<!-- roslaunch whycon_ros whycon.launch camInfo:=/iris/camera/camera_info camRaw:=/iris/camera/image_raw maxMarkers:=1 idBits:=2 -->
-	
 
-
-	<!-- PID controller node instantiation -->
-	<!--
-	<node name="x_pid" pkg="pid" type="controller" ns="gimbal_controller">
-		<param name="Kp" value="5.0" />
-		<param name="Ki" value="0.0" />
-		<param name="Kd" value="0.1" />
-		<param name="upper_limit" value="10" />
-		<param name="lower_limit" value="-10" />
-		<param name="windup_limit" value="10" />
-		<param name="max_loop_frequency" value="100.0" />
-		<param name="min_loop_frequency" value="100.0" />
-	</node>
-	<node name="y_pid" pkg="pid" type="controller" ns="gimbal_controller">
-		<param name="Kp" value="5.0" />
-		<param name="Ki" value="0.0" />
-		<param name="Kd" value="0.1" />
-		<param name="upper_limit" value="10" />
-		<param name="lower_limit" value="-10" />
-		<param name="windup_limit" value="10" />
-		<param name="max_loop_frequency" value="100.0" />
-		<param name="min_loop_frequency" value="100.0" />
-	</node>
-	-->
 </launch>

@@ -48,6 +48,7 @@ double normalize(double data, double minimum, double maximum)
 int control_effort_to_pwm_signal(double control_effort)
 {
 	int result = 1500 + (500 * control_effort);
+
 	return result;
 }
 
@@ -57,25 +58,18 @@ void send_rc_control(int tilt_control_effort, int pan_control_effort)
 	override_rc_in_message.channels[PAN_CHANNEL - 1] =  pan_control_effort;
 
 	override_rc_in_publisher.publish(override_rc_in_message);
-	
-	new_tilt_data = false;
-	new_pan_data = false;
 }
 
 void camera_control_effort_x_callback(const std_msgs::Float64::ConstPtr& msg)
 {
 	camera_pid_control_effort_x.data = msg->data;
-
 	pan_pwm = control_effort_to_pwm_signal(camera_pid_control_effort_x.data);
-	new_pan_data = true;
 }
 
 void camera_control_effort_y_callback(const std_msgs::Float64::ConstPtr& msg)
 {
 	camera_pid_control_effort_y.data = msg->data;
-
 	tilt_pwm = control_effort_to_pwm_signal(camera_pid_control_effort_y.data);
-	new_tilt_data = true;
 }
 
 // remove rotation from a pose by rotating it by the inverse of its rotation
@@ -118,44 +112,24 @@ void generate_transform_straightened( const geometry_msgs::PoseStamped & _pose_i
 
 void whycon_visual_callback(const whycon_ros::MarkerArray::ConstPtr& msg)
 {
-	if( msg->markers[0].id != 1 && msg->markers[0].id != 2 )
-	{
-		return;
-	}
-	
-	//	ROS_INFO("In whycon visual callback!");
+	last_whycon_detection_time = ros::Time::now();
 
 	// capture the pose
 	geometry_msgs::PoseStamped _whycon_camera_pose;	
 	_whycon_camera_pose.header.stamp = ros::Time::now();
 	_whycon_camera_pose.header.frame_id = "camera_frame_whycon";
-//	_whycon_camera_pose.pose = msg->markers[0].pose;
 	_whycon_camera_pose.pose = msg->markers[0].position;
 
-	// aim the camera
-	if( ros::Time::now() - last_apriltag_detection_time >= detection_timeout )
-	{
-		landing_pad_pixel_position_x.data = normalize_pixel_position( msg->markers[0].u, camera_pixel_width );
-		landing_pad_pixel_position_y.data = normalize_pixel_position( msg->markers[0].v, camera_pixel_height );
+	// publish the whycon/whycode's normalized [-1.0,1.0] pixel positions for aiming the camera
+	landing_pad_pixel_position_x.data = normalize_pixel_position( msg->markers[0].u, camera_pixel_width );
+	landing_pad_pixel_position_y.data = normalize_pixel_position( msg->markers[0].v, camera_pixel_height );
+	landing_pad_pixel_position_x_publisher.publish(landing_pad_pixel_position_x);
+	landing_pad_pixel_position_y_publisher.publish(landing_pad_pixel_position_y);
 
-		landing_pad_pixel_position_x_publisher.publish(landing_pad_pixel_position_x);
-		landing_pad_pixel_position_y_publisher.publish(landing_pad_pixel_position_y);
+	// publish setpoints of 0 (centered)
+	camera_pid_setpoint_x_publisher.publish(camera_pid_setpoint_x);
+	camera_pid_setpoint_y_publisher.publish(camera_pid_setpoint_y);
 
-		camera_pid_setpoint_x_publisher.publish(camera_pid_setpoint_x);
-		camera_pid_setpoint_y_publisher.publish(camera_pid_setpoint_y);
-
-		string_message.data = "whycon";
-		marker_type_publisher.publish(string_message);
-		
-		if( new_tilt_data && new_pan_data )
-		{
-			send_rc_control(tilt_pwm, pan_pwm);
-			calculate_camera_angles();
-			idle_state_msg.data = false;
-		}
-	}
-	last_whycon_detection_time = ros::Time::now();
-	
 	tf2::Quaternion rotation, current_inverse_rotation, previous_rotation, difference;
 
 	double yaw, pitch, roll;
@@ -170,13 +144,10 @@ void whycon_visual_callback(const whycon_ros::MarkerArray::ConstPtr& msg)
 	whycon_camera_transform_stamped.header.stamp = ros::Time::now();
 	whycon_camera_transform_stamped.child_frame_id = "camera_frame_whycon_straightened";
 	whycon_camera_transform_stamped.header.frame_id = "body_enu";
+	
 	// set rotation
-//		camera_rotation.setRPY(0, 0, - gimbal_x_position + whycon_yaw);
 	tf2::Quaternion camera_rotation;
-//	camera_rotation.setRPY(0, 0, gimbal_x_position );
 	camera_rotation.setRPY(0, 0, pan_angle );
-//	camera_rotation.setRPY(-body_roll, -body_pitch, gimbal_x_position );
-//		tf2::Quaternion correction(0, 0, 1, 0);
 	tf2::Quaternion correction(1, 0, 0, 0);
 	tf2::Quaternion total_rotation = camera_rotation * correction;
 	tf2::Quaternion inverse_total_rotation = total_rotation.inverse();
@@ -199,8 +170,10 @@ void whycon_visual_callback(const whycon_ros::MarkerArray::ConstPtr& msg)
 
 int main(int argc, char **argv)
 {
+	// say hello
 	ROS_INFO("Started gimbal_controller!");
 
+	// initialize node
 	ros::init(argc, argv, "gimbal_controller");
 	ros::NodeHandle node_handle;
 	
@@ -210,131 +183,67 @@ int main(int argc, char **argv)
 	std_msgs_true.data = true;
 
 	// initialize subscribers
-//	ros::Subscriber apriltag_visual_subscriber	= node_handle.subscribe("/tag_detections",	1000, apriltag_visual_callback	);
-//	ros::Subscriber apriltag_u_subscriber		= node_handle.subscribe("/apriltag_u",		1000, apriltag_u_callback	);
-//	ros::Subscriber apriltag_v_subscriber		= node_handle.subscribe("/apriltag_v",		1000, apriltag_v_callback	);
 	ros::Subscriber whycon_visual_subscriber	= node_handle.subscribe("/whycon_ros/markers",	1000, whycon_visual_callback	);
 	ros::Subscriber pid_x_control_effort_subscriber = node_handle.subscribe("/pid/camera/control_effort/x", 1000, camera_control_effort_x_callback);
 	ros::Subscriber pid_y_control_effort_subscriber = node_handle.subscribe("/pid/camera/control_effort/y", 1000, camera_control_effort_y_callback);
 	ros::Subscriber state_subscriber		= node_handle.subscribe("/mavros/state", 1000, state_callback);
 
-	// publisher to set the states of the current gimbal PID control values
-	setpoint_publisher_x = node_handle.advertise<std_msgs::Float64>("/gimbal/x/setpoint",	1000);
-	setpoint_publisher_y = node_handle.advertise<std_msgs::Float64>("/gimbal/y/setpoint",	1000);
-	landing_pad_pixel_position_x_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/pixel_position/x", 1000);
-	landing_pad_pixel_position_y_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/pixel_position/y", 1000);
-	idle_state_publisher = node_handle.advertise<std_msgs::Bool>("/gimbal/idle_state",	1000);
-	idle_state_msg.data  = false;
-	camera_pid_enable_x_publisher = node_handle.advertise<std_msgs::Bool>("/pid/camera/x/enable", 1000);
-	camera_pid_enable_y_publisher = node_handle.advertise<std_msgs::Bool>("/pid/camera/y/enable", 1000);
-
-	// publisher to move the gimbal
-	override_rc_in_publisher = node_handle.advertise<mavros_msgs::OverrideRCIn>("/mavros/rc/override", 1000);
+	// initialize publishers
+	landing_pad_pixel_position_x_publisher	= node_handle.advertise<std_msgs::Float64>("/landing_pad/pixel_position/x", 1000);
+	landing_pad_pixel_position_y_publisher	= node_handle.advertise<std_msgs::Float64>("/landing_pad/pixel_position/y", 1000);
+	camera_pid_enable_x_publisher		= node_handle.advertise<std_msgs::Bool>("/pid/camera/x/enable", 1000);
+	camera_pid_enable_y_publisher		= node_handle.advertise<std_msgs::Bool>("/pid/camera/y/enable", 1000);
+	whycon_camera_pose_publisher		= node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/whycon_pose", 1000);
+	landing_pad_camera_pose_publisher	= node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
+	camera_pid_setpoint_x_publisher		= node_handle.advertise<std_msgs::Float64>("/pid/camera/setpoint/x", 1000);
+	camera_pid_setpoint_y_publisher		= node_handle.advertise<std_msgs::Float64>("/pid/camera/setpoint/y", 1000);
+	camera_tilt_publisher			= node_handle.advertise<std_msgs::Float64>("/camera/tilt", 1000);
+	camera_pan_publisher			= node_handle.advertise<std_msgs::Float64>("/camera/pan", 1000);
+	override_rc_in_publisher		= node_handle.advertise<mavros_msgs::OverrideRCIn>("/mavros/rc/override", 1000);
+	
+	// initialize all rc channel overrides to 0 so they will be ignored
 	for(int channel = 0; channel < 8; channel ++)
 	{
 		override_rc_in_message.channels[channel] = 0;
 	}
 
-	// publisher to share the pose of the landing pad within the camera frame
-	marker_type_publisher = node_handle.advertise<std_msgs::String>("/landing_pad/current_marker_type", 1000);
-	whycon_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/whycon_pose", 1000);
-	apriltag_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/apriltag_pose", 1000);
-	landing_pad_camera_pose_publisher = node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
-	yaw_displacement_publisher = node_handle.advertise<std_msgs::Float64>("/landing_pad/yaw_displacement", 1000);
-	vo_publisher = node_handle.advertise<nav_msgs::Odometry>("/vo", 1000);
-	camera_pid_setpoint_x_publisher = node_handle.advertise<std_msgs::Float64>("/pid/camera/setpoint/x", 1000);
-	camera_pid_setpoint_y_publisher = node_handle.advertise<std_msgs::Float64>("/pid/camera/setpoint/y", 1000);
-	camera_tilt_publisher	= node_handle.advertise<std_msgs::Float64>("/camera/tilt", 1000);
-	camera_pan_publisher	= node_handle.advertise<std_msgs::Float64>("/camera/pan", 1000);
-
 	// initialize transform broadcaster
 	static tf2_ros::TransformBroadcaster transform_broadcaster;
 
+	// initialize camera setpoints
 	camera_pid_setpoint_x.data = 0;
 	camera_pid_setpoint_y.data = 0;
 
-	// initialize gimbal position to forward level
-//	setpoint_x.data = idle_setpoint_x;
-//	setpoint_y.data = idle_setpoint_y;
-//	setpoint_publisher_x.publish(setpoint_x);
-//	setpoint_publisher_y.publish(setpoint_y);
-//	send_rc_control(tilt_idle_pwm, pan_idle_pwm);
-
+	// for tf2
 	transform_buffer.setUsingDedicatedThread(true);
 
-	ros::Time initial = ros::Time::now();
-	ros::Duration duration(0.5);
-	while( ros::Time::now() - initial < duration )
-	{
-//		idle_state_msg.data = false;
-//		idle_state_publisher.publish(idle_state_msg);
-		
-//		setpoint_publisher_x.publish(to_msg(idle_setpoint_x));
-//		setpoint_publisher_y.publish(to_msg(idle_setpoint_y));
-//		send_rc_control();
-		idle_state_msg.data = true;
-		idle_state_publisher.publish(idle_state_msg);
-	}
-
-	// timing
+	// 2 second timeout before ceding control of the gimbal
 	ros::Duration detection_fail_timeout(2.0);
-	ros::Rate loop_rate(70);
+	
+	// ********************************************************************************************
+	ros::Rate loop_rate(50);
 	while( ros::ok() )
 	{
+		// callbacks
 		ros::spinOnce();
 
-
-		last_detection_time = last_apriltag_detection_time;
-		
-		landing_pad_camera_pose = apriltag_camera_pose;
-		if( (ros::Time::now() - last_apriltag_detection_time >= detection_timeout) || (abs(apriltag_camera_pose.pose.position.z) > 4) )
-//		if( last_whycon_detection_time > last_apriltag_detection_time )
+		// check for recent detection
+		if( ros::Time::now() - last_whycon_detection_time <= detection_fail_timeout )
 		{
-			last_detection_time = last_whycon_detection_time;
+			// publish the whycon pose as the landing pad pose since it is the only marker
 			landing_pad_camera_pose = whycon_camera_pose;
-			landing_pad_camera_pose.pose.orientation.w = 1;
-			landing_pad_camera_pose.pose.orientation.x = 0;
-			landing_pad_camera_pose.pose.orientation.y = 0;
-			landing_pad_camera_pose.pose.orientation.z = 0;
-			
-			camera_pid_enable_x_publisher.publish(std_msgs_true);
-			camera_pid_enable_y_publisher.publish(std_msgs_true);
-		}
-		
-		if( idle_state_msg.data && state.mode == "GUIDED" )
-		{
-//			camera_pid_control_effort_x.data = 1500;
-//			camera_pid_control_effort_y.data = 1350;
+			landing_pad_camera_pose_publisher.publish(landing_pad_camera_pose);
 
-			send_rc_control(tilt_idle_pwm, pan_idle_pwm);
+			// send PWM signals to MAVROS to control the gimbal
+			send_rc_control(tilt_pwm, pan_pwm);
+
+			// calculate physical camera angles from given PWM signals
 			calculate_camera_angles();
 		}
-
-		landing_pad_camera_pose_publisher.publish(landing_pad_camera_pose);
-
-		if( ros::Time::now() - last_detection_time > detection_fail_timeout && ! idle_state_msg.data)
-		{
-			// set the gimbal to the idle attitude
-			setpoint_x.data = idle_setpoint_x;
-			setpoint_y.data = idle_setpoint_y;
-			idle_state_msg.data = true;
-
-			camera_pid_enable_x_publisher.publish(std_msgs_false);
-			camera_pid_enable_y_publisher.publish(std_msgs_false);
-
-//			camera_pid_control_effort_x.data = 1500;
-//			camera_pid_control_effort_y.data = 1350;
-
-			tilt_pwm = tilt_idle_pwm;
-			pan_pwm  = pan_idle_pwm;
-
-			send_rc_control(tilt_idle_pwm, pan_idle_pwm);
-			calculate_camera_angles();
-			idle_state_publisher.publish(idle_state_msg);
-		}
-		
+	
 		loop_rate.sleep();
 	}
-
+	// ********************************************************************************************
+	
 	return 0;
 }
