@@ -1,5 +1,40 @@
 <?xml version="1.0"?>
 
 <launch>
-	<node name="gimbal_controller" pkg="gimbal_controller" type="gimbal_controller" />
+	<node name="gimbal_controller" pkg="gimbal_controller" type="gimbal_controller" output="screen" />
+
+        <!--node name="gimbal_x" pkg="pid" type="controller" ns="pid" output="screen" >
+                <param name="node_name" value="velocity_north" />
+                <param name="Kp" value="-0.2" />
+                <param name="Ki" value="-0.2" />
+                <param name="Kd" value="-0.5" />
+                <param name="upper_limit" value="1" />
+                <param name="lower_limit" value="-1" />
+                <param name="windup_limit" value="1" />
+                <param name="max_loop_frequency" value="100.0" />
+                <param name="min_loop_frequency" value="100.0" />
+		<remap from="state" to="/landing_pad/u" />
+		<remap from="setpoint" to="/landing_pad/setpoint/u" />
+		<remap from="control_effort" to="landing_pad/control_effort/u" />
+                <remap from="pid_enable" to="pid_enable/n" />
+                <param name="reconfigure_topic" value="reconfigure_topic/n" />
+        </node>
+
+	<node name="gimbal_y" pkg="pid" type="controller" ns="pid" output="screen" >
+                <param name="node_name" value="velocity_north" />
+                <param name="Kp" value="-0.2" />
+                <param name="Ki" value="-0.2" />
+                <param name="Kd" value="-0.5" />
+                <param name="upper_limit" value="3" />
+                <param name="lower_limit" value="-3" />
+                <param name="windup_limit" value="2" />
+                <param name="max_loop_frequency" value="100.0" />
+                <param name="min_loop_frequency" value="100.0" />
+                <remap from="state" to="/landing_pad/body_neu/displacement/n" />
+                <remap from="setpoint" to="/pid/body_neu/setpoint/n" />
+                <remap from="control_effort" to="control_effort/n" />
+                <remap from="pid_enable" to="pid_enable/n" />
+                <param name="reconfigure_topic" value="reconfigure_topic/n" />
+        </node-->
+
 </launch>

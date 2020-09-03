@@ -64,34 +64,17 @@ void whycon_visual_callback(const whycon_ros::MarkerArray::ConstPtr& msg)
 	_whycon_camera_pose.pose = msg->markers[0].position;
 
 	// aim the camera
-	if( ros::Time::now() - last_apriltag_detection_time >= detection_timeout )
-	{
-		// setpoint_x is the target yaw of the camera
-		// setpoint_y is the target pitch of the camera
-		// this sort of thing seems to work the best using PID systems on the x and y positions
-		setpoint_x.data += -setpoint_scalar * _whycon_camera_pose.pose.position.x / _whycon_camera_pose.pose.position.z;
-		setpoint_y.data +=  setpoint_scalar * _whycon_camera_pose.pose.position.y / _whycon_camera_pose.pose.position.z;
-		
-		setpoint_publisher_x.publish(setpoint_x);
-		setpoint_publisher_y.publish(setpoint_y);
-		idle_state_msg.data = false;
-	}
+	setpoint_x.data += -setpoint_scalar * _whycon_camera_pose.pose.position.x / _whycon_camera_pose.pose.position.z;
+	setpoint_y.data +=  setpoint_scalar * _whycon_camera_pose.pose.position.y / _whycon_camera_pose.pose.position.z;
+	
+	setpoint_publisher_x.publish(setpoint_x);
+	setpoint_publisher_y.publish(setpoint_y);
+	idle_state_msg.data = false;
+
 	last_whycon_detection_time = ros::Time::now();
 
-	// ***********************************************************************************
-	// maintain continuity in WhyCon orientation
-	tf2::Quaternion rotation, current_inverse_rotation, previous_rotation, difference;
+	tf2::Quaternion rotation;
 	tf2::fromMsg(_whycon_camera_pose.pose.orientation, rotation);
-	current_inverse_rotation = rotation.inverse();
-	tf2::fromMsg(previous_whycon_camera_pose.pose.orientation, previous_rotation);
-
-	difference = previous_rotation * current_inverse_rotation;
-	if( difference.getAngle() < 0.001 )// < 0.0349066 ) // 2 deg
-	{
-		rotation = current_inverse_rotation;
-		_whycon_camera_pose.pose.orientation = tf2::toMsg(current_inverse_rotation);
-	}
-	// ***********************************************************************************
 
 	double yaw, pitch, roll;
 	tf2::Matrix3x3(rotation).getEulerYPR(whycon_yaw, whycon_pitch, whycon_roll);
@@ -105,12 +88,10 @@ void whycon_visual_callback(const whycon_ros::MarkerArray::ConstPtr& msg)
 	whycon_camera_transform_stamped.header.stamp = ros::Time::now();
 	whycon_camera_transform_stamped.child_frame_id = "camera_frame_whycon_straightened";
 	whycon_camera_transform_stamped.header.frame_id = "body_enu";
+	
 	// set rotation
-//		camera_rotation.setRPY(0, 0, - gimbal_x_position + whycon_yaw);
 	tf2::Quaternion camera_rotation;
 	camera_rotation.setRPY(0, 0, gimbal_x_position );
-//	camera_rotation.setRPY(-body_roll, -body_pitch, gimbal_x_position );
-//		tf2::Quaternion correction(0, 0, 1, 0);
 	tf2::Quaternion correction(1, 0, 0, 0);
 	tf2::Quaternion total_rotation = camera_rotation * correction;
 	tf2::Quaternion inverse_total_rotation = total_rotation.inverse();
@@ -123,7 +104,6 @@ void whycon_visual_callback(const whycon_ros::MarkerArray::ConstPtr& msg)
 	try
 	{
 		generate_transform_straightened(whycon_camera_pose);
-//		straighten_pose(whycon_camera_pose);
 	}
 	catch( const std::exception & e )
 	{
@@ -178,10 +158,9 @@ int main(int argc, char **argv)
 		
 		setpoint_publisher_x.publish(idle_setpoint_x);
 		setpoint_publisher_y.publish(idle_setpoint_y);
-		
-		idle_state_msg.data = true;
-		idle_state_publisher.publish(idle_state_msg);
 	}
+	idle_state_msg.data = true;
+	idle_state_publisher.publish(idle_state_msg);
 
 	// timing
 	ros::Duration detection_fail_timeout(2.0);
@@ -190,50 +169,20 @@ int main(int argc, char **argv)
 	{
 		ros::spinOnce();
 
-
-		last_detection_time = last_apriltag_detection_time;
-		
-		if( (ros::Time::now() - last_apriltag_detection_time >= detection_timeout) )// || (abs(apriltag_camera_pose.pose.position.z) > 4) )
-//		if( last_whycon_detection_time > last_apriltag_detection_time )
+		if( ros::Time::now() - last_whycon_detection_time <= detection_fail_timeout )
 		{
-			last_detection_time = last_whycon_detection_time;
 			landing_pad_camera_pose = whycon_camera_pose;
-			landing_pad_camera_pose.pose.orientation.w = 1;
-			landing_pad_camera_pose.pose.orientation.x = 0;
-			landing_pad_camera_pose.pose.orientation.y = 0;
-			landing_pad_camera_pose.pose.orientation.z = 0;
-
+			landing_pad_camera_pose_publisher.publish(landing_pad_camera_pose);
 		}
-		else // if the detection is an apriltag then publish the yaw displacement
-		{
-			;
-//			double yaw_temp = gimbal_x_position - landing_pad_yaw;
-
-			/*
-			if( abs(yaw_temp) > 3.1415926 )
-			{
-				yaw_temp = copysign(6.28 - abs(yaw_temp), gimbal_x_position);
-			}
-			*/
-
-//			yaw_displacement_publisher.publish( fmod(gimbal_x_position - landing_pad_yaw, 3.1415926) );
-//			yaw_displacement_publisher.publish( yaw_temp );
-		}
-
-		landing_pad_camera_pose_publisher.publish(landing_pad_camera_pose);
-
-		if( ros::Time::now() - last_detection_time > detection_fail_timeout && ! idle_state_msg.data)
+		else
 		{
 			// set the gimbal to the idle attitude
 			setpoint_x.data = idle_setpoint_x;
 			setpoint_y.data = idle_setpoint_y;
-			idle_state_msg.data = true;
 			
 			// publish the message
-			setpoint_publisher_x.publish(idle_setpoint_x);
-			setpoint_publisher_y.publish(idle_setpoint_y);
-
-			idle_state_publisher.publish(idle_state_msg);
+			setpoint_publisher_x.publish(setpoint_x);
+			setpoint_publisher_y.publish(setpoint_y);
 		}
 		
 		loop_rate.sleep();
