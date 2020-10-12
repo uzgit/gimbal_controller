@@ -1,5 +1,0 @@
-<?xml version="1.0"?>
-
-<launch>
-	<node name="gimbal_controller" pkg="gimbal_controller" type="gimbal_controller" />
-</launch>

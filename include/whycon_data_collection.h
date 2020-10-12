@@ -1,5 +1,5 @@
-#ifndef GIMBAL_CONTROLLER_H
-#define GIMBAL_CONTROLLER_H
+#ifndef WHYCON_DATA_COLLECTION_H
+#define WHYCON_DATA_COLLECTION_H
 
 #include "ros/ros.h"
 #include <geometry_msgs/Point.h>
@@ -17,11 +17,17 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
 
-#include <whycon_ros/MarkerArray.h>
+#include <whycon/MarkerArray.h>
 
 #include <cmath>
 #include <ctime>
 #include <algorithm>
+
+#include <iostream>
+#include <fstream>
+#include <csignal>
+
+std::ofstream output_file;
 
 int landing_pad_id[2] = {1, 2};
 double apriltag_offset = 0.75;
@@ -71,7 +77,7 @@ geometry_msgs::PoseStamped landing_pad_relative_pose;
 
 void gimbal_x_position_callback( const std_msgs::Float64::ConstPtr );
 void gimbal_y_position_callback( const std_msgs::Float64::ConstPtr );
-void whycon_visual_callback( const whycon_ros::MarkerArray::ConstPtr& );
+void whycon_visual_callback( const whycon::MarkerArray::ConstPtr& );
 
 geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped& );
 
