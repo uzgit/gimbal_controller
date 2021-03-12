@@ -17,7 +17,9 @@
 #include <tf2/transform_datatypes.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_broadcaster.h>
-#include <whycon_ros/MarkerArray.h>
+//#include <whycon_ros/MarkerArray.h>
+
+#include "apriltag_ros/AprilTagDetectionArray.h"
 
 double idle_setpoint_x = 0.0;
 double idle_setpoint_y = 0.4;
@@ -87,7 +89,8 @@ geometry_msgs::PoseStamped landing_pad_relative_pose;
 
 void gimbal_x_position_callback( const std_msgs::Float64::ConstPtr );
 void gimbal_y_position_callback( const std_msgs::Float64::ConstPtr );
-void whycon_visual_callback( const whycon_ros::MarkerArray::ConstPtr& );
+//void whycon_visual_callback( const whycon_ros::MarkerArray::ConstPtr& );
+void apriltag3_visual_callback( const apriltag_ros::AprilTagDetectionArray& );
 
 geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped& );
 

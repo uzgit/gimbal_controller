@@ -28,23 +28,6 @@ void state_callback(const mavros_msgs::State::ConstPtr& msg)
 	state = *msg;
 }
 
-// normalize a pixel position from [0, range_max] into [-1.0, 1.0] for PID control
-double normalize_pixel_position(double pixel_position, double range_max)
-{
-	double range  = range_max / 2.0;
-	double result = (pixel_position - range) / range;
-
-	return result;
-}
-
-double normalize(double data, double minimum, double maximum)
-{
-	double average = (minimum + maximum) / 2.0;
-	double result  = (data - average) / average;
-
-	return result;
-}
-
 int control_effort_to_pwm_signal(double control_effort)
 {
 	int result = 1500 + (500 * control_effort);
@@ -72,99 +55,26 @@ void camera_control_effort_y_callback(const std_msgs::Float64::ConstPtr& msg)
 	tilt_pwm = control_effort_to_pwm_signal(camera_pid_control_effort_y.data);
 }
 
-// remove rotation from a pose by rotating it by the inverse of its rotation
-void generate_transform_straightened( const geometry_msgs::PoseStamped & _pose_in )
+void apriltag3_visual_callback( const apriltag_ros::AprilTagDetectionArray& msg )
 {
-	// declare pose variables
-	geometry_msgs::PoseStamped pose_out;
-	geometry_msgs::PoseStamped pose_in = _pose_in;
+	int i = 0;
+	while( i < msg.detections.size() && msg.detections[i].name != "landing_pad" ) i ++;
 
-	// access the transform broadcaster
-	static tf2_ros::TransformBroadcaster transform_broadcaster;
-
-	// declare a message in which to store the new transform
-	geometry_msgs::TransformStamped transform_stamped_message;
-
-	// set the transform's header
-	transform_stamped_message.header.stamp = ros::Time::now();
-	// make the parent frame_id equal to the child's frame_id with '_straightened' appended
-	transform_stamped_message.header.frame_id = pose_in.header.frame_id + "_straightened";
-	transform_stamped_message.child_frame_id = pose_in.header.frame_id;
-
-	// invert the rotation
-	tf2::Quaternion rotation, inverse_rotation;
-	tf2::fromMsg(pose_in.pose.orientation, rotation);
-	inverse_rotation = rotation.inverse();
-
-	// set the rotation from the parent to the child
-	transform_stamped_message.transform.rotation = tf2::toMsg(inverse_rotation);
-//	transform_stamped_message.transform.rotation = pose_in.pose.orientation;
-
-	// send the transform
-	transform_broadcaster.sendTransform(transform_stamped_message);
-
-	/*
-	transform_buffer.setUsingDedicatedThread(true);
-	// transform the pose and return it
-	return transform_buffer.transform(pose_in, transform_stamped_message.header.frame_id, ros::Duration(0.05));
-	*/
-}
-
-void whycon_visual_callback(const whycon_ros::MarkerArray::ConstPtr& msg)
-{
-	last_whycon_detection_time = ros::Time::now();
-
-	// capture the pose
-	geometry_msgs::PoseStamped _whycon_camera_pose;	
-	_whycon_camera_pose.header.stamp = ros::Time::now();
-	_whycon_camera_pose.header.frame_id = "camera_frame_whycon";
-	_whycon_camera_pose.pose = msg->markers[0].position;
-
-	// publish the whycon/whycode's normalized [-1.0,1.0] pixel positions for aiming the camera
-	landing_pad_pixel_position_x.data = normalize_pixel_position( msg->markers[0].u, camera_pixel_width );
-	landing_pad_pixel_position_y.data = normalize_pixel_position( msg->markers[0].v, camera_pixel_height );
-	landing_pad_pixel_position_x_publisher.publish(landing_pad_pixel_position_x);
-	landing_pad_pixel_position_y_publisher.publish(landing_pad_pixel_position_y);
-
-	// publish setpoints of 0 (centered)
-	camera_pid_setpoint_x_publisher.publish(camera_pid_setpoint_x);
-	camera_pid_setpoint_y_publisher.publish(camera_pid_setpoint_y);
-
-	tf2::Quaternion rotation, current_inverse_rotation, previous_rotation, difference;
-
-	double yaw, pitch, roll;
-	tf2::Matrix3x3(rotation).getEulerYPR(whycon_yaw, whycon_pitch, whycon_roll);
-
-	// set global and publish
-	whycon_camera_pose = _whycon_camera_pose;
-	whycon_camera_pose_publisher.publish(whycon_camera_pose);
-
-	// calculate landing pad position using whycon
-	geometry_msgs::TransformStamped whycon_camera_transform_stamped;
-	whycon_camera_transform_stamped.header.stamp = ros::Time::now();
-	whycon_camera_transform_stamped.child_frame_id = "camera_frame_whycon_straightened";
-	whycon_camera_transform_stamped.header.frame_id = "body_enu";
-	
-	// set rotation
-	tf2::Quaternion camera_rotation;
-	camera_rotation.setRPY(0, 0, pan_angle );
-	tf2::Quaternion correction(1, 0, 0, 0);
-	tf2::Quaternion total_rotation = camera_rotation * correction;
-	tf2::Quaternion inverse_total_rotation = total_rotation.inverse();
-	whycon_camera_transform_stamped.transform.rotation = tf2::toMsg(inverse_total_rotation);
-
-	// broadcast transform
-	static tf2_ros::TransformBroadcaster transform_broadcaster;
-	transform_broadcaster.sendTransform(whycon_camera_transform_stamped);
-
-	try
+	if( i < msg.detections.size() )
 	{
-		generate_transform_straightened(whycon_camera_pose);
-	}
-	catch( const std::exception & e )
-	{
-		ROS_WARN("Exception in whycon callback (gimbal_controller)");
-		ROS_INFO_STREAM(e.what());
+		// get the normalized pixel positions
+		landing_pad_pixel_position_x.data = msg.detections[i].c_normalized[0];
+		landing_pad_pixel_position_y.data = msg.detections[i].c_normalized[1];
+
+		// publish the normalized pixel positions to the pid controllers
+		landing_pad_pixel_position_x_publisher.publish( landing_pad_pixel_position_x );
+		landing_pad_pixel_position_y_publisher.publish( landing_pad_pixel_position_y );
+
+		// publish pid setpoints
+		camera_pid_setpoint_x_publisher.publish( camera_pid_setpoint_x );
+		camera_pid_setpoint_y_publisher.publish( camera_pid_setpoint_y );
+
+		last_apriltag_detection_time = ros::Time::now();
 	}
 }
 
@@ -183,7 +93,8 @@ int main(int argc, char **argv)
 	std_msgs_true.data = true;
 
 	// initialize subscribers
-	ros::Subscriber whycon_visual_subscriber	= node_handle.subscribe("/whycon_ros/markers",	1000, whycon_visual_callback	);
+//	ros::Subscriber whycon_visual_subscriber	= node_handle.subscribe("/whycon_ros/markers",	1000, whycon_visual_callback	);
+	ros::Subscriber apriltag3_subscriber		= node_handle.subscribe("/tag_detections", 		1000, apriltag3_visual_callback);
 	ros::Subscriber pid_x_control_effort_subscriber = node_handle.subscribe("/pid/camera/control_effort/x", 1000, camera_control_effort_x_callback);
 	ros::Subscriber pid_y_control_effort_subscriber = node_handle.subscribe("/pid/camera/control_effort/y", 1000, camera_control_effort_y_callback);
 	ros::Subscriber state_subscriber		= node_handle.subscribe("/mavros/state", 1000, state_callback);
@@ -207,15 +118,9 @@ int main(int argc, char **argv)
 		override_rc_in_message.channels[channel] = 0;
 	}
 
-	// initialize transform broadcaster
-	static tf2_ros::TransformBroadcaster transform_broadcaster;
-
 	// initialize camera setpoints
 	camera_pid_setpoint_x.data = 0;
 	camera_pid_setpoint_y.data = 0;
-
-	// for tf2
-	transform_buffer.setUsingDedicatedThread(true);
 
 	// 2 second timeout before ceding control of the gimbal
 	ros::Duration detection_fail_timeout(2.0);
@@ -224,16 +129,14 @@ int main(int argc, char **argv)
 	ros::Rate loop_rate(50);
 	while( ros::ok() )
 	{
+		ROS_INFO("in gimbal_controller main loop!");
+
 		// callbacks
 		ros::spinOnce();
 
 		// check for recent detection
-		if( ros::Time::now() - last_whycon_detection_time <= detection_fail_timeout )
+		if( ros::Time::now() - last_apriltag_detection_time <= detection_fail_timeout )
 		{
-			// publish the whycon pose as the landing pad pose since it is the only marker
-			landing_pad_camera_pose = whycon_camera_pose;
-			landing_pad_camera_pose_publisher.publish(landing_pad_camera_pose);
-
 			// send PWM signals to MAVROS to control the gimbal
 			send_rc_control(tilt_pwm, pan_pwm);
 

@@ -8,6 +8,7 @@ add_compile_options(-std=c++11)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  apriltag_ros
   geometry_msgs
   message_generation
   message_runtime
@@ -16,7 +17,6 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   tf2_ros
   visualization_msgs
-  whycon_ros
 )
 
 ## System dependencies are found with CMake's conventions
