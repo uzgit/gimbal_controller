@@ -122,9 +122,15 @@ int main(int argc, char **argv)
 	camera_pid_setpoint_x.data = 0;
 	camera_pid_setpoint_y.data = 0;
 
+	for(int i = 0; i < 100; i ++)
+	{
+		send_rc_control(1750, 1500);
+	}
+
 	// 2 second timeout before ceding control of the gimbal
 	ros::Duration detection_fail_timeout(2.0);
-	
+	bool detection_failure = true;
+
 	// ********************************************************************************************
 	ros::Rate loop_rate(50);
 	while( ros::ok() )
@@ -142,6 +148,14 @@ int main(int argc, char **argv)
 
 			// calculate physical camera angles from given PWM signals
 			calculate_camera_angles();
+
+			detection_failure = false;
+		}
+		else if( ! detection_failure )
+		{
+			send_rc_control(1500, 1500);
+
+			detection_failure = true;
 		}
 	
 		loop_rate.sleep();
