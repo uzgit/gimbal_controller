@@ -17,10 +17,8 @@ double interpolate(double input, double input_min, double input_max, double outp
 void calculate_camera_angles()
 {
 	tilt_angle = interpolate(tilt_pwm, PWM_MIN, PWM_MAX, tilt_min, tilt_max);
-	pan_angle  = interpolate(pan_pwm,  PWM_MIN, PWM_MAX, pan_min,  pan_max );
 
 	camera_tilt_publisher.publish(to_msg(tilt_angle));
-	camera_pan_publisher.publish(to_msg(pan_angle));
 }
 
 void state_callback(const mavros_msgs::State::ConstPtr& msg)
@@ -35,18 +33,11 @@ int control_effort_to_pwm_signal(double control_effort)
 	return result;
 }
 
-void send_rc_control(int tilt_control_effort, int pan_control_effort)
+void send_rc_control(int tilt_control_effort)
 {
 	override_rc_in_message.channels[TILT_CHANNEL - 1] = tilt_control_effort;
-	override_rc_in_message.channels[PAN_CHANNEL - 1] =  pan_control_effort;
 
 	override_rc_in_publisher.publish(override_rc_in_message);
-}
-
-void camera_control_effort_x_callback(const std_msgs::Float64::ConstPtr& msg)
-{
-	camera_pid_control_effort_x.data = msg->data;
-	pan_pwm = control_effort_to_pwm_signal(camera_pid_control_effort_x.data);
 }
 
 void camera_control_effort_y_callback(const std_msgs::Float64::ConstPtr& msg)
@@ -95,7 +86,6 @@ int main(int argc, char **argv)
 	// initialize subscribers
 //	ros::Subscriber whycon_visual_subscriber	= node_handle.subscribe("/whycon_ros/markers",	1000, whycon_visual_callback	);
 	ros::Subscriber apriltag3_subscriber		= node_handle.subscribe("/tag_detections", 		1000, apriltag3_visual_callback);
-	ros::Subscriber pid_x_control_effort_subscriber = node_handle.subscribe("/pid/camera/control_effort/x", 1000, camera_control_effort_x_callback);
 	ros::Subscriber pid_y_control_effort_subscriber = node_handle.subscribe("/pid/camera/control_effort/y", 1000, camera_control_effort_y_callback);
 	ros::Subscriber state_subscriber		= node_handle.subscribe("/mavros/state", 1000, state_callback);
 
@@ -109,7 +99,6 @@ int main(int argc, char **argv)
 	camera_pid_setpoint_x_publisher		= node_handle.advertise<std_msgs::Float64>("/pid/camera/setpoint/x", 1000);
 	camera_pid_setpoint_y_publisher		= node_handle.advertise<std_msgs::Float64>("/pid/camera/setpoint/y", 1000);
 	camera_tilt_publisher			= node_handle.advertise<std_msgs::Float64>("/camera/tilt", 1000);
-	camera_pan_publisher			= node_handle.advertise<std_msgs::Float64>("/camera/pan", 1000);
 	override_rc_in_publisher		= node_handle.advertise<mavros_msgs::OverrideRCIn>("/mavros/rc/override", 1000);
 	
 	// initialize all rc channel overrides to 0 so they will be ignored
@@ -124,7 +113,7 @@ int main(int argc, char **argv)
 
 	for(int i = 0; i < 100; i ++)
 	{
-		send_rc_control(1750, 1500);
+		send_rc_control(1750);
 	}
 
 	// 2 second timeout before ceding control of the gimbal
@@ -144,7 +133,7 @@ int main(int argc, char **argv)
 		if( ros::Time::now() - last_apriltag_detection_time <= detection_fail_timeout )
 		{
 			// send PWM signals to MAVROS to control the gimbal
-			send_rc_control(tilt_pwm, pan_pwm);
+			send_rc_control(tilt_pwm);
 
 			// calculate physical camera angles from given PWM signals
 			calculate_camera_angles();
@@ -153,7 +142,7 @@ int main(int argc, char **argv)
 		}
 		else if( ! detection_failure )
 		{
-			send_rc_control(1500, 1500);
+			send_rc_control(1500);
 
 			detection_failure = true;
 		}
