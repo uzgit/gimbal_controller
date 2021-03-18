@@ -90,7 +90,7 @@ geometry_msgs::PoseStamped landing_pad_relative_pose;
 void gimbal_x_position_callback( const std_msgs::Float64::ConstPtr );
 void gimbal_y_position_callback( const std_msgs::Float64::ConstPtr );
 //void whycon_visual_callback( const whycon_ros::MarkerArray::ConstPtr& );
-void apriltag3_visual_callback( const apriltag_ros::AprilTagDetectionArray& );
+void apriltag3_visual_callback( const apriltag_ros::AprilTagDetectionArray::ConstPtr );
 
 geometry_msgs::PoseStamped straighten_pose( const geometry_msgs::PoseStamped& );
 

@@ -46,16 +46,16 @@ void camera_control_effort_y_callback(const std_msgs::Float64::ConstPtr& msg)
 	tilt_pwm = control_effort_to_pwm_signal(camera_pid_control_effort_y.data);
 }
 
-void apriltag3_visual_callback( const apriltag_ros::AprilTagDetectionArray& msg )
+void apriltag3_visual_callback( const apriltag_ros::AprilTagDetectionArray::ConstPtr msg )
 {
 	int i = 0;
-	while( i < msg.detections.size() && msg.detections[i].name != "landing_pad" ) i ++;
+	while( i < msg->detections.size() && (msg->detections[i].name.find("landing_pad") == std::string::npos) ) i ++;
 
-	if( i < msg.detections.size() )
+	if( i < msg->detections.size() )
 	{
 		// get the normalized pixel positions
-		landing_pad_pixel_position_x.data = msg.detections[i].c_normalized[0];
-		landing_pad_pixel_position_y.data = msg.detections[i].c_normalized[1];
+		landing_pad_pixel_position_x.data = msg->detections[i].c_normalized[0];
+		landing_pad_pixel_position_y.data = msg->detections[i].c_normalized[1];
 
 		// publish the normalized pixel positions to the pid controllers
 		landing_pad_pixel_position_x_publisher.publish( landing_pad_pixel_position_x );
@@ -72,7 +72,7 @@ void apriltag3_visual_callback( const apriltag_ros::AprilTagDetectionArray& msg 
 int main(int argc, char **argv)
 {
 	// say hello
-	ROS_INFO("Started gimbal_controller!");
+	ROS_WARN("Started gimbal_controller!");
 
 	// initialize node
 	ros::init(argc, argv, "gimbal_controller");
