@@ -84,7 +84,6 @@ int main(int argc, char **argv)
 	std_msgs_true.data = true;
 
 	// initialize subscribers
-//	ros::Subscriber whycon_visual_subscriber	= node_handle.subscribe("/whycon_ros/markers",	1000, whycon_visual_callback	);
 	ros::Subscriber apriltag3_subscriber		= node_handle.subscribe("/tag_detections", 		1000, apriltag3_visual_callback);
 	ros::Subscriber pid_y_control_effort_subscriber = node_handle.subscribe("/pid/camera/control_effort/y", 1000, camera_control_effort_y_callback);
 	ros::Subscriber state_subscriber		= node_handle.subscribe("/mavros/state", 1000, state_callback);
@@ -92,8 +91,8 @@ int main(int argc, char **argv)
 	// initialize publishers
 	landing_pad_pixel_position_x_publisher	= node_handle.advertise<std_msgs::Float64>("/landing_pad/pixel_position/x", 1000);
 	landing_pad_pixel_position_y_publisher	= node_handle.advertise<std_msgs::Float64>("/landing_pad/pixel_position/y", 1000);
-	camera_pid_enable_x_publisher		= node_handle.advertise<std_msgs::Bool>("/pid/camera/x/enable", 1000);
-	camera_pid_enable_y_publisher		= node_handle.advertise<std_msgs::Bool>("/pid/camera/y/enable", 1000);
+	camera_pid_enable_x_publisher		= node_handle.advertise<std_msgs::Bool>("/pid/camera/enable/x", 1000);
+	camera_pid_enable_y_publisher		= node_handle.advertise<std_msgs::Bool>("/pid/camera/enable/y", 1000);
 	whycon_camera_pose_publisher		= node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/whycon_pose", 1000);
 	landing_pad_camera_pose_publisher	= node_handle.advertise<geometry_msgs::PoseStamped>("/landing_pad/camera_pose", 1000);
 	camera_pid_setpoint_x_publisher		= node_handle.advertise<std_msgs::Float64>("/pid/camera/setpoint/x", 1000);

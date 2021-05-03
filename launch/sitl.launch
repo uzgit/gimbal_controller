@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 
 <launch>
+	<include file="$(find apriltag_ros)/launch/sitl.launch" />
 
         <node respawn="true" name="pid_y" pkg="pid" type="controller" ns="pid" output="log">
                 <param name="node_name" value="pid_y"/>
