@@ -48,8 +48,8 @@ int pan_pwm  = pan_idle_pwm;
 
 #define PWM_MIN 1100
 #define PWM_MAX 1900
-#define TILT_CHANNEL 6
-#define PAN_CHANNEL  8
+#define TILT_CHANNEL 8
+#define PAN_CHANNEL  6
 double pan_max  =  0.523599; // -30 deg
 double pan_min  = -0.523599; //  30 deg
 double tilt_max =  0.174533; //  10 deg
