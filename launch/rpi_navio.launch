@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+
+<launch>
+
+	<!--include file="$(find apriltag_ros)/launch/rpi_navio.launch" /-->
+	<include file="$(find apriltag_ros)/launch/raspicam_node_continuous_detection.launch" />
+
+        <node respawn="true" name="pid_y" pkg="pid" type="controller" ns="pid" output="log">
+                <param name="node_name" value="pid_y"/>
+                <param name="Kp" value="-0.45"/>
+                <param name="Ki" value="-0.40"/>
+                <param name="Kd" value="-0.03"/>
+                <!---param name="Kp" value="-0.60"/>
+                <param name="Ki" value="-0.75"/>
+                <param name="Kd" value="-0.00"/-->
+                <param name="upper_limit" value="1.0"/>
+                <param name="lower_limit" value="-1.0"/>
+                <param name="windup_limit" value="1.0"/>
+                <param name="max_loop_frequency" value="100.0"/>
+                <param name="min_loop_frequency" value="100.0"/>
+                <remap from="state" to="/landing_pad/pixel_position/y"/>
+                <remap from="setpoint" to="/pid/camera/setpoint/y"/>
+                <remap from="control_effort" to="/pid/camera/control_effort/y"/>
+                <remap from="pid_enable" to="/pid/camera/enable/y"/>
+                <param name="reconfigure_topic" value="reconfigure_topic/y"/>
+        </node>
+
+	<node respawn="true" name="gimbal_controller" pkg="gimbal_controller" type="gimbal_controller" />
+
+</launch>
